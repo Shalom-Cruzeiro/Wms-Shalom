@@ -712,6 +712,25 @@ function onCatFile(ev){
         $('#mapcard').scrollIntoView({behavior:'smooth',block:'nearest'});
         return;
       }
+      // Registro de Inventário (agrupado por fornecedor)
+      const aoa0=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});
+      const isReg=aoa0.slice(0,40).some(r=>norm(r[0]||'')==='codigo'&&r.some(c=>norm(c).includes('barras')))||aoa0.slice(0,6).some(r=>r.some(c=>norm(c).includes('registro de inventario')));
+      if(isReg){
+        const processed=processRegistroInventario(aoa0);
+        if(processed&&processed.length){
+          imp={microvix:true,processed};
+          $('#map-cols').style.display='none';
+          $('#map-title').textContent='Registro de Inventário detectado';
+          $('#map-sub').textContent='processei por fornecedor automaticamente';
+          const comForn=processed.filter(p=>p.forn).length, comEan=processed.filter(p=>p.ean).length;
+          $('#map-info').textContent=processed.length+' produtos · '+comForn+' com fornecedor · '+comEan+' com cód. barras. Ex.: '+(processed[0]?(processed[0].cod+' · '+(processed[0].desc||'—')+' · '+(processed[0].forn||'—')):'—');
+          if($('#imp-replace'))$('#imp-replace').checked=true;
+          switchTab('cadastro');
+          $('#mapcard').style.display='';
+          $('#mapcard').scrollIntoView({behavior:'smooth',block:'nearest'});
+          return;
+        }
+      }
       // Formato simples: uma aba com colunas código/descrição/tamanho
       const ws=wb.Sheets[wb.SheetNames[0]];
       const aoa=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:''});
@@ -776,7 +795,32 @@ function processMicrovix(wb){
       [emcx,exml].forEach(e=>{if(e&&!p.eans.includes(e))p.eans.push(e);});
     }
   });
-  return order.map(cod=>{const p=prods[cod];return {cod:p.cod,ean:(p.eans[0]||''),eans:p.eans,desc:p.desc,tam:extractSize(p.desc)};});
+  return order.map(cod=>{const p=prods[cod];return {cod:p.cod,ean:(p.eans[0]||''),eans:p.eans,desc:p.desc,tam:extractSize(p.desc),forn:p.forn||''};});
+}
+/* Lê a exportação "Registro de Inventário" (agrupada por fornecedor) */
+function parseFornName(s){let t=String(s||'').trim();t=t.replace(/^\d+\s*-\s*/,'');t=t.replace(/^\d[\d.\-\/]{6,}\s+/,'');return t.trim()||String(s||'').trim();}
+function processRegistroInventario(aoa){
+  let hi=-1;
+  for(let i=0;i<Math.min(aoa.length,40);i++){const r=(aoa[i]||[]).map(norm);if(r[0]==='codigo'&&r.some(c=>c.includes('barras'))){hi=i;break;}}
+  if(hi<0)return null;
+  const prods={};const order=[];let forn='';
+  for(let i=hi+1;i<aoa.length;i++){
+    const row=aoa[i]||[];
+    const a=String(row[0]==null?'':row[0]).trim();
+    const b=String(row[1]==null?'':row[1]).trim();
+    if(!a&&!b)continue;
+    if(!a){ if(/^total/i.test(b))continue; forn=parseFornName(b); continue; }
+    const cod=cleanCode(a);if(!cod)continue;
+    let bc=-1;for(let c=2;c<Math.min(row.length,9);c++){const v=String(row[c]==null?'':row[c]).replace(/\D/g,'');if(v.length>=12){bc=c;break;}}
+    let ean='',desc=b;
+    if(bc>=0){ean=cleanCode(row[bc]);const mid=[];for(let c=1;c<bc;c++){const t=String(row[c]==null?'':row[c]).trim();if(t)mid.push(t);}desc=mid.join(' ');}
+    if(!(cod in prods)){prods[cod]={cod,desc,eans:[],forn};order.push(cod);}
+    const p=prods[cod];
+    if(!p.forn&&forn)p.forn=forn;
+    if(!p.desc&&desc)p.desc=desc;
+    if(ean&&!p.eans.includes(ean))p.eans.push(ean);
+  }
+  return order.map(cod=>{const p=prods[cod];return {cod:p.cod,ean:(p.eans[0]||''),eans:p.eans,desc:p.desc,tam:extractSize(p.desc),forn:p.forn||''};});
 }
 function guessCol(headers,keywords,exclude){for(const kw of keywords)for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(exclude&&exclude.some(x=>h.includes(x)))continue;if(h.includes(kw))return i;}return -1;}
 function impPreview(){const ie=+$('#m_ean').value,id=+$('#m_desc').value,it=+$('#m_tam').value;
@@ -790,7 +834,7 @@ function confirmImport(){
   if(replace){if(!confirm('Substituir toda a base atual ('+CATALOG.length+' itens) pela nova ('+prev.length+' itens)?'))return;CATALOG=[];buildIndex();}
   let add=0,upd=0;prev.forEach(p=>{
     const ex=(p.cod&&byCod[p.cod])||(p.ean&&byEan[p.ean]);
-    if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
+    if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.forn)ex.forn=p.forn;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
     else{CATALOG.push(p.eans?p:{cod:p.cod||'',ean:p.ean||'',eans:p.ean?[p.ean]:[],desc:p.desc,tam:p.tam});add++;}
   });
   buildIndex();persistCatalog();renderCatalog();
