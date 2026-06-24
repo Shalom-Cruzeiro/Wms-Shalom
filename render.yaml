@@ -1,9 +1,9 @@
-# Render Blueprint - publica o WMS + cria um PostgreSQL automaticamente
+# Render Blueprint - WMS Shalom (planos pagos: dados permanentes, sem hibernar)
 services:
   - type: web
     name: shalom-wms
     runtime: node
-    plan: free
+    plan: starter            # web service pago (não dorme); ~US$7/mês
     buildCommand: npm install
     startCommand: npm start
     envVars:
@@ -22,4 +22,4 @@ services:
 
 databases:
   - name: shalom-wms-db
-    plan: free
+    plan: basic-256mb         # PostgreSQL pago (não expira); ~US$6-7/mês
