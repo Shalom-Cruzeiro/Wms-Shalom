@@ -1245,8 +1245,8 @@ function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click
 function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+'?'))return;DIST.demand[id]={};persistDist();renderDistLojas();renderDist();toast('Pedido removido','ok');}
 
 let distPreview=null;
-function openDistPreview(id,map){
-  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]}))};
+function openDistPreview(id,map,raw){
+  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]})),raw:raw||null};
   let o=document.getElementById('dist-preview');
   if(!o){o=document.createElement('div');o.id='dist-preview';document.body.appendChild(o);}
   renderDistPreview();o.style.display='flex';
@@ -1261,7 +1261,7 @@ function renderDistPreview(){
     '<div class="dp-body"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtde</th><th></th></tr></thead><tbody>'+
     (items.length?items.map((it,i)=>{const p=byCod[it.cod]||{};return '<tr><td class="mono">'+distEscAttr(it.cod)+'</td><td>'+(p.desc?distEscAttr(p.desc):'<span style="color:var(--warn)">não está no cadastro</span>')+'</td><td class="r"><input class="qty-in" type="number" min="0" value="'+(+it.qtd||0)+'" oninput="distPrevSet('+i+',this.value)"></td><td class="r"><button class="btn sm gho dgr" onclick="distPrevDel('+i+')">remover</button></td></tr>';}).join(''):'<tr><td colspan=4 style="text-align:center;color:var(--muted);padding:20px">Nada lido. Adicione os itens manualmente abaixo.</td></tr>')+
     '</tbody></table></div>'+
-    '<div class="dp-add">+ adicionar item: <input id="dp-cod" placeholder="código" class="qty-in" style="width:120px;text-align:left;font-family:var(--mono)"> <input id="dp-qtd" type="number" min="0" placeholder="qtde" class="qty-in" style="width:80px"> <button class="btn sm" onclick="distPrevAdd()">adicionar</button></div>'+
+    '<div class="dp-add">+ adicionar item: <input id="dp-cod" placeholder="código" class="qty-in" style="width:120px;text-align:left;font-family:var(--mono)"> <input id="dp-qtd" type="number" min="0" placeholder="qtde" class="qty-in" style="width:80px"> <button class="btn sm" onclick="distPrevAdd()">adicionar</button>'+(distPreview.raw?' <button class="btn sm gho" style="margin-left:auto" onclick="distPrevRaw()">ver texto lido</button>':'')+'</div>'+
     '<div class="dp-ft"><button class="btn" onclick="closeDistPreview()">Cancelar</button><button class="btn pri" onclick="confirmDistPreview()">Confirmar pedido ('+fmt(tot)+' un)</button></div></div>';
 }
 function distPrevSet(i,v){if(!distPreview||!distPreview.items[i])return;distPreview.items[i].qtd=Math.max(0,parseInt(v)||0);
@@ -1271,6 +1271,14 @@ function distPrevSet(i,v){if(!distPreview||!distPreview.items[i])return;distPrev
 function distPrevDel(i){if(!distPreview)return;distPreview.items.splice(i,1);renderDistPreview();}
 function distPrevAdd(){if(!distPreview)return;const c=cleanCode(($('#dp-cod')||{}).value||'');const q=Math.max(0,parseInt(($('#dp-qtd')||{}).value)||0);if(!c||!q){toast('Informe código e quantidade','warn');return;}const ex=distPreview.items.find(it=>it.cod===c);if(ex)ex.qtd+=q;else distPreview.items.push({cod:c,qtd:q});renderDistPreview();}
 function closeDistPreview(){const o=document.getElementById('dist-preview');if(o)o.style.display='none';distPreview=null;}
+function distPrevRaw(){
+  if(!distPreview||!distPreview.raw)return;
+  const body=document.querySelector('#dist-preview .dp-body');if(!body)return;
+  if(document.getElementById('dp-rawbox')){document.getElementById('dp-rawbox').remove();return;}
+  const pre=document.createElement('pre');pre.id='dp-rawbox';pre.style.cssText='margin:0;padding:12px 16px;border-top:1px solid var(--line2);background:#0e1c34;color:#cfe2ff;font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto';
+  pre.textContent=distPreview.raw.join('\n');
+  body.appendChild(pre);
+}
 async function confirmDistPreview(){
   if(!distPreview)return;const id=distPreview.id;const map={};
   distPreview.items.forEach(it=>{const q=+it.qtd||0;if(it.cod&&q>0)map[it.cod]=(map[it.cod]||0)+q;});
@@ -1286,15 +1294,15 @@ function onDistFile(ev){
   distOverlay(true,isPdf?'Lendo o PDF… isso pode demorar um pouco.':'Lendo a planilha…');
   const r=new FileReader();
   r.onload=async()=>{
-    let map={};
+    let map={},raw=null;
     try{
-      if(isPdf){const o=await readPdfBaixa(r.result);map=parseStorePdf(o.lines);}
+      if(isPdf){const o=await readPdfBaixa(r.result);raw=o.lines;map=parseStorePdf(o.lines);}
       else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
     distBusy=null;distOverlay(false);renderDistLojas();
     const n=Object.keys(map).length;
-    if(!n){toast('Não encontrei itens nesse arquivo. Confira se é a requisição certa.','warn');return;}
-    openDistPreview(id,map);
+    if(!n&&!raw){toast('Não encontrei itens nesse arquivo. Confira se é a requisição certa.','warn');return;}
+    openDistPreview(id,map,raw);
   };
   r.onerror=()=>{distBusy=null;distOverlay(false);toast('Erro ao abrir o arquivo','err');renderDistLojas();};
   r.readAsArrayBuffer(f);ev.target.value='';
@@ -1314,9 +1322,10 @@ function parseStoreSheet(wb){
 }
 function parseStorePdf(lines){
   const map={};let cur=null;
-  const qtyOnly=/^(\d{1,6})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/; // requisicao solicitada atendida
+  const DEC='\\d+[.,]\\d{2}';
+  const qtyOnly=new RegExp('^(\\d{1,6})\\s+('+DEC+')\\s+('+DEC+')\\s*$'); // requisicao solicitada atendida
   const codeOnly=/^(\d{2,7})\s*$/;
-  const tail=/(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/;
+  const tail=new RegExp('('+DEC+')\\s+('+DEC+')\\s*$'); // ...solicitada atendida (no fim)
   const lead=/^(\d{2,7})\s+\S/;
   const noise=/produto\(s\)|listad|p[aá]gina|linx\.|https?:|cnpj|insc|e-?mail|avenida|^obs\s*:/i;
   lines.forEach(raw=>{
