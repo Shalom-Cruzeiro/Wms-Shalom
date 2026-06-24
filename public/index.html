@@ -809,7 +809,7 @@ function processRegistroInventario(aoa){
     const a=String(row[0]==null?'':row[0]).trim();
     const b=String(row[1]==null?'':row[1]).trim();
     if(!a&&!b)continue;
-    if(!a){ if(/^total/i.test(b))continue; forn=parseFornName(b); continue; }
+    if(!a){ if(/^\d+\s*-\s*\S/.test(b))forn=parseFornName(b); continue; }
     const cod=cleanCode(a);if(!cod)continue;
     let bc=-1;for(let c=2;c<Math.min(row.length,9);c++){const v=String(row[c]==null?'':row[c]).replace(/\D/g,'');if(v.length>=12){bc=c;break;}}
     let ean='',desc=b;
