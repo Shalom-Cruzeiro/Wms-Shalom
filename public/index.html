@@ -1077,16 +1077,33 @@ async function readPdfBaixa(buf){
     Object.keys(byY).map(Number).sort((a,b)=>b-a).forEach(y=>{const l=byY[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim();if(l)lines.push(l);});
   }
   if(lines.join('').replace(/\s/g,'').length>20)return {lines,ocr:false};
-  // 2) PDF é imagem -> OCR
+  // 2) PDF é imagem -> OCR (endireita a página e lê em português)
   if(!window.Tesseract)throw new Error('OCR (Tesseract) não carregou — verifique a conexão');
-  const all=[];
-  for(let i=1;i<=pdf.numPages;i++){
-    ocrStatus('Lendo a imagem da página '+i+'/'+pdf.numPages+'…');
-    const page=await pdf.getPage(i);const vp=page.getViewport({scale:2.4});
+  const lang='por';
+  const qtyHits=t=>((t||'').match(/\d+[.,]\d{2}/g)||[]).length;
+  async function ocrPage(page,scale,rot,label){
+    const vp=page.getViewport({scale,rotation:rot});
     const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
     await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-    const {data}=await Tesseract.recognize(canvas,'eng',{logger:m=>{if(m.status==='recognizing text')ocrStatus('Reconhecendo página '+i+'/'+pdf.numPages+': '+Math.round((m.progress||0)*100)+'%');}});
-    (data.text||'').split('\n').forEach(l=>{l=l.replace(/\s+/g,' ').trim();if(l)all.push(l);});
+    const {data}=await Tesseract.recognize(canvas,lang,{logger:m=>{if(m.status==='recognizing text')ocrStatus(label+' '+Math.round((m.progress||0)*100)+'%');}});
+    return data.text||'';
+  }
+  const all=[];
+  // descobre a orientação na página 1
+  const p1=await pdf.getPage(1);let bestRot=0,bestHits=-1,p1text='';
+  for(const rot of [0,270,90,180]){
+    ocrStatus('Ajustando a orientação da página… ('+rot+'°)');
+    const t=await ocrPage(p1,2.2,rot,'Lendo página 1/'+pdf.numPages+':');
+    const h=qtyHits(t);
+    if(h>bestHits){bestHits=h;bestRot=rot;p1text=t;}
+    if(h>=8)break;
+  }
+  (p1text||'').split('\n').forEach(l=>{l=l.replace(/\s+/g,' ').trim();if(l)all.push(l);});
+  for(let i=2;i<=pdf.numPages;i++){
+    ocrStatus('Lendo a imagem da página '+i+'/'+pdf.numPages+'…');
+    const page=await pdf.getPage(i);
+    const t=await ocrPage(page,2.4,bestRot,'Reconhecendo página '+i+'/'+pdf.numPages+':');
+    t.split('\n').forEach(l=>{l=l.replace(/\s+/g,' ').trim();if(l)all.push(l);});
   }
   return {lines:all,ocr:true};
 }
@@ -1245,8 +1262,8 @@ function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click
 function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+'?'))return;DIST.demand[id]={};persistDist();renderDistLojas();renderDist();toast('Pedido removido','ok');}
 
 let distPreview=null;
-function openDistPreview(id,map,raw){
-  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]})),raw:raw||null};
+function openDistPreview(id,map,raw,ocr){
+  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]})),raw:raw||null,ocr:!!ocr};
   let o=document.getElementById('dist-preview');
   if(!o){o=document.createElement('div');o.id='dist-preview';document.body.appendChild(o);}
   renderDistPreview();o.style.display='flex';
@@ -1258,6 +1275,7 @@ function renderDistPreview(){
   o.innerHTML='<div class="dp-box"><div class="dp-hd"><div><div class="dp-tt">Confira o pedido — '+distEscAttr(st.name||'')+'</div>'+
     '<div class="dp-sub">Lido do arquivo. Ajuste, remova ou adicione itens antes de confirmar. <b>'+items.length+' itens · '+fmt(tot)+' un</b></div></div>'+
     '<button class="btn sm gho" onclick="closeDistPreview()">✕</button></div>'+
+    (distPreview.ocr?'<div style="background:var(--warn-bg);color:#7a4b00;border-bottom:1px solid #f0dcb4;padding:10px 18px;font-size:12px">⚠ Este PDF é uma <b>imagem escaneada</b> — a leitura automática é imprecisa, principalmente os <b>códigos</b>. O ideal é o PDF original do Microvix (Imprimir → Salvar como PDF). Confira e ajuste os itens antes de confirmar.</div>':'')+
     '<div class="dp-body"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtde</th><th></th></tr></thead><tbody>'+
     (items.length?items.map((it,i)=>{const p=byCod[it.cod]||{};return '<tr><td class="mono">'+distEscAttr(it.cod)+'</td><td>'+(p.desc?distEscAttr(p.desc):'<span style="color:var(--warn)">não está no cadastro</span>')+'</td><td class="r"><input class="qty-in" type="number" min="0" value="'+(+it.qtd||0)+'" oninput="distPrevSet('+i+',this.value)"></td><td class="r"><button class="btn sm gho dgr" onclick="distPrevDel('+i+')">remover</button></td></tr>';}).join(''):'<tr><td colspan=4 style="text-align:center;color:var(--muted);padding:20px">Nada lido. Adicione os itens manualmente abaixo.</td></tr>')+
     '</tbody></table></div>'+
@@ -1294,15 +1312,15 @@ function onDistFile(ev){
   distOverlay(true,isPdf?'Lendo o PDF… isso pode demorar um pouco.':'Lendo a planilha…');
   const r=new FileReader();
   r.onload=async()=>{
-    let map={},raw=null;
+    let map={},raw=null,ocr=false;
     try{
-      if(isPdf){const o=await readPdfBaixa(r.result);raw=o.lines;map=parseStorePdf(o.lines);}
+      if(isPdf){const o=await readPdfBaixa(r.result);raw=o.lines;ocr=o.ocr;map=parseStorePdf(o.lines);}
       else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
     distBusy=null;distOverlay(false);renderDistLojas();
     const n=Object.keys(map).length;
     if(!n&&!raw){toast('Não encontrei itens nesse arquivo. Confira se é a requisição certa.','warn');return;}
-    openDistPreview(id,map,raw);
+    openDistPreview(id,map,raw,ocr);
   };
   r.onerror=()=>{distBusy=null;distOverlay(false);toast('Erro ao abrir o arquivo','err');renderDistLojas();};
   r.readAsArrayBuffer(f);ev.target.value='';
