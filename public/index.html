@@ -419,7 +419,7 @@
 
     <div class="card">
       <div class="hd"><h3>Lojas e percentuais</h3><span class="sub">anexe o pedido de cada loja (Excel ou PDF do Microvix) e defina o %</span>
-        <div class="right"><span class="sumbadge" id="dist-sum">soma 0%</span><button class="btn sm" onclick="distDividirIgual()">Dividir igual</button><button class="btn sm pri" onclick="distAddLoja()">+ Loja</button></div>
+        <div class="right"><span class="sumbadge" id="dist-sum">soma 0%</span><button class="btn sm" onclick="distDividirIgual()">Dividir igual</button></div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="dist-lojas"></div></div>
     </div>
@@ -755,8 +755,9 @@ function processMicrovix(wb){
       const emcx=cleanCode(iMcx>=0?row[iMcx]:'');
       const exml=cleanCode(iEan>=0?row[iEan]:'');
       const desc=((iDm>=0?String(row[iDm]||'').trim():'')||(iDx>=0?String(row[iDx]||'').trim():''));
-      if(!(cod in prods)){prods[cod]={cod,desc,eans:[]};order.push(cod);}
+      if(!(cod in prods)){prods[cod]={cod,desc,eans:[],forn:String(name||'').trim()};order.push(cod);}
       const p=prods[cod];
+      if(!p.forn&&name)p.forn=String(name).trim();
       if(!p.desc&&desc)p.desc=desc;
       if(desc&&!extractSize(p.desc)&&extractSize(desc))p.desc=desc;
       [emcx,exml].forEach(e=>{if(e&&!p.eans.includes(e))p.eans.push(e);});
@@ -1198,21 +1199,27 @@ function exportVagas(){
 
 
 /* ============== DISTRIBUIÇÃO ENTRE LOJAS ============== */
-const K_DIST='inv_dist_v1';
-let DIST={stores:[],demand:{}};
-let distStep=1, distFileTarget=null, distSeq=1;
-async function loadDist(){const d=await store.get(K_DIST);if(d&&Array.isArray(d.stores)){DIST={stores:d.stores,demand:d.demand||{}};distSeq=Math.max(1,...DIST.stores.map(s=>(+s.id||0)+1));}else{DIST={stores:[],demand:{}};}}
-async function persistDist(){await store.set(K_DIST,DIST);}
+const K_DIST='inv_dist_v2';
+const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['outlet','Outlet'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
+let DIST={cdPct:0,stores:[],demand:{}};
+let distStep=1, distFileTarget=null;
+async function loadDist(){
+  const d=(await store.get(K_DIST))||{};
+  const sp=d.pct||{}, sd=d.demand||{};
+  DIST={cdPct:(+d.cdPct||0),stores:FIXED_STORES.map(a=>({id:a[0],name:a[1],pct:(sp[a[0]]!=null?+sp[a[0]]:0)})),demand:{}};
+  FIXED_STORES.forEach(a=>{DIST.demand[a[0]]=sd[a[0]]||{};});
+}
+async function persistDist(){const pct={};DIST.stores.forEach(s=>pct[s.id]=s.pct);await store.set(K_DIST,{cdPct:DIST.cdPct,pct,demand:DIST.demand});}
 function distEscAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function distNum(v){if(v==null||v==='')return 0;if(typeof v==='number')return Math.round(v);let s=String(v).trim().replace(/\s/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Math.round(parseFloat(s)||0);}
 function findCol(headers,terms,exclude){for(const t of terms)for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(exclude&&exclude.some(x=>h.includes(x)))continue;if(h.includes(t))return i;}return -1;}
+function distForn(cod){const f=(byCod[cod]||{}).forn;return f?String(f):'';}
+function distFornCell(cod){const f=distForn(cod);return f?distEscAttr(f):'<span style="color:var(--soft)">—</span>';}
 
-function distAddLoja(){const id=String(distSeq++);DIST.stores.push({id:id,name:'Loja '+(DIST.stores.length+1),pct:0});DIST.demand[id]={};persistDist();renderDistLojas();renderDist();}
-function distRemove(id){if(!confirm('Remover esta loja e o pedido dela?'))return;DIST.stores=DIST.stores.filter(s=>s.id!==id);delete DIST.demand[id];persistDist();renderDistLojas();renderDist();}
-function distSetName(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.name=v;persistDist();fillDistLojaSel();}}
+function distSetCdPct(v){DIST.cdPct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}
 function distSetPct(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.pct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}}
-function distDividirIgual(){const n=DIST.stores.length;if(!n)return;const base=Math.floor(100/n);DIST.stores.forEach(s=>s.pct=base);DIST.stores[0].pct+=100-base*n;persistDist();renderDistLojas();renderDist();}
-function updateDistSum(){const t=DIST.stores.reduce((a,s)=>a+(+s.pct||0),0);const el=$('#dist-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
+function distDividirIgual(){const n=DIST.stores.length;if(!n)return;const rem=Math.max(0,100-(+DIST.cdPct||0));const base=Math.floor(rem/n);DIST.stores.forEach(s=>s.pct=base);DIST.stores[0].pct+=rem-base*n;persistDist();renderDistLojas();renderDist();}
+function updateDistSum(){const t=(+DIST.cdPct||0)+DIST.stores.reduce((a,s)=>a+(+s.pct||0),0);const el=$('#dist-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
 
 function distPick(id){distFileTarget=id;$('#dist-file').click();}
 function onDistFile(ev){
@@ -1222,11 +1229,11 @@ function onDistFile(ev){
   r.onload=async()=>{
     try{
       let map={};
-      if(isPdf){const {lines}=await readPdfBaixa(r.result);map=parseStorePdf(lines);}
+      if(isPdf){const o=await readPdfBaixa(r.result);map=parseStorePdf(o.lines);}
       else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
       const n=Object.keys(map).length;
       if(!n){toast('Não encontrei itens nesse arquivo. Se for PDF imagem, tente o Excel.','warn');}
-      else{DIST.demand[id]=map;await persistDist();const un=Object.values(map).reduce((a,b)=>a+b,0);toast((DIST.stores.find(s=>s.id===id)||{}).name+': '+n+' itens · '+fmt(un)+' un','ok');}
+      else{DIST.demand[id]=map;await persistDist();const un=Object.values(map).reduce((a,b)=>a+b,0);const st=DIST.stores.find(s=>s.id===id)||{};toast((st.name||'Loja')+': '+n+' itens · '+fmt(un)+' un','ok');}
       renderDistLojas();renderDist();
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
   };
@@ -1247,20 +1254,17 @@ function parseStoreSheet(wb){
 }
 function parseStorePdf(lines){
   const map={};
-  lines.forEach(l=>{
-    const m=l.match(/^(\d{3,})\b.*?(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/);
-    if(!m)return;
-    const cod=cleanCode(m[1]);const qt=distNum(m[2]);
-    if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;
-  });
+  lines.forEach(l=>{const m=l.match(/^(\d{3,})\b.*?(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/);if(!m)return;const cod=cleanCode(m[1]);const qt=distNum(m[2]);if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;});
   return map;
 }
 
 function distCodes(){const set={};DIST.stores.forEach(s=>{const d=DIST.demand[s.id]||{};Object.keys(d).forEach(c=>{if(d[c]>0)set[c]=1;});});return Object.keys(set).sort();}
 function distCompute(){
-  const codes=distCodes();const res={};let kDisp=0,kDist=0,kBuy=0;
+  const codes=distCodes();const res={};let kDisp=0,kDist=0,kBuy=0,kRes=0;
   codes.forEach(cod=>{
-    const disp=saldoOf(cod);let remaining=disp;const recebe={};let dist=0,totalPed=0;
+    const disp=saldoOf(cod);
+    const reserve=Math.floor(((+DIST.cdPct||0)/100)*disp);
+    let remaining=Math.max(0,disp-reserve);const recebe={};let dist=0,totalPed=0;
     DIST.stores.forEach(s=>{
       const pedido=(DIST.demand[s.id]||{})[cod]||0;totalPed+=pedido;
       const cota=Math.floor(((+s.pct||0)/100)*disp);
@@ -1268,8 +1272,8 @@ function distCompute(){
       recebe[s.id]=give;remaining-=give;dist+=give;
     });
     const p=byCod[cod]||{};
-    res[cod]={cod,desc:p.desc||'',vaga:vagaOf(cod),disp,recebe,dist,sobra:disp-dist,totalPed,comprar:Math.max(0,totalPed-dist)};
-    kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;
+    res[cod]={cod,desc:p.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,comprar:Math.max(0,totalPed-dist)};
+    kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;kRes+=reserve;
   });
   const set=(id,v)=>{const e=$('#'+id);if(e)e.textContent=fmt(v);};
   set('dist-k-itens',codes.length);set('dist-k-disp',kDisp);set('dist-k-dist',kDist);set('dist-k-buy',kBuy);
@@ -1279,13 +1283,15 @@ function distVagaPill(v){return v?'<span class="pill-vaga">'+v+'</span>':'<span 
 
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
-  if(!DIST.stores.length){el.innerHTML='<div class="empty"><div class="big">▦</div>Nenhuma loja ainda. Clique em &ldquo;+ Loja&rdquo;, dê o nome e anexe o pedido (Excel ou PDF).</div>';updateDistSum();return;}
-  el.innerHTML='<table><thead><tr><th style="width:36%">Loja</th><th class="r" style="width:90px">%</th><th>Pedido</th><th style="width:150px"></th></tr></thead><tbody>'+
-    DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);
-      return '<tr><td><input class="inl" value="'+distEscAttr(s.name)+'" onchange="distSetName(\''+s.id+'\',this.value)"></td>'+
-      '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"></td>'+
-      '<td>'+(itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>')+'</td>'+
-      '<td class="r"><button class="btn sm gho" onclick="distPick(\''+s.id+'\')">anexar</button> <button class="btn sm gho dgr" onclick="distRemove(\''+s.id+'\')">remover</button></td></tr>';}).join('')+'</tbody></table>';
+  let rows='<tr style="background:#f0f6ff"><td><b>CD — fica no estoque</b></td>'+
+    '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+DIST.cdPct||0)+'" oninput="distSetCdPct(this.value)"></td>'+
+    '<td><span class="badge b-info">reserva do CD</span></td><td></td></tr>';
+  rows+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);
+    return '<tr><td>'+distEscAttr(s.name)+'</td>'+
+    '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"></td>'+
+    '<td>'+(itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>')+'</td>'+
+    '<td class="r"><button class="btn sm gho" onclick="distPick(\''+s.id+'\')">anexar pedido</button></td></tr>';}).join('');
+  el.innerHTML='<table><thead><tr><th style="width:36%">Destino</th><th class="r" style="width:90px">%</th><th>Pedido</th><th style="width:150px"></th></tr></thead><tbody>'+rows+'</tbody></table>';
   updateDistSum();
 }
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
@@ -1294,21 +1300,21 @@ function renderDistE1(){
   const codes=distCodes();
   if(!codes.length){body.innerHTML='<div class="empty">Anexe os pedidos das lojas para montar as cargas.</div>';return;}
   if(sel==='__all'){
-    body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra CD</th><th>Cada loja recebe</th></tr></thead><tbody>'+
-      codes.map(cod=>{const r=res[cod];const chips=DIST.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name.split(' ')[0])+' <b>'+r.recebe[s.id]+'</b></span>').join('');
-        return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td><td class="r"><span class="badge b-ok">'+r.dist+'</span></td><td class="r num" style="color:var(--muted)">'+r.sobra+'</td><td><div class="split">'+(chips||'<span style="color:var(--soft)">—</span>')+'</div></td></tr>';}).join('')+'</tbody></table>';
+    body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra CD</th><th>Cada loja recebe</th></tr></thead><tbody>'+
+      codes.map(cod=>{const r=res[cod];const chips=DIST.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name)+' <b>'+r.recebe[s.id]+'</b></span>').join('');
+        return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td><td class="r"><span class="badge b-ok">'+r.dist+'</span></td><td class="r num" style="color:var(--muted)">'+r.sobra+'</td><td><div class="split">'+(chips||'<span style="color:var(--soft)">—</span>')+'</div></td></tr>';}).join('')+'</tbody></table>';
   }else{
     const s=DIST.stores.find(x=>x.id===sel);if(!s){body.innerHTML='';return;}let ped=0,rec=0;
     const rows=codes.map(cod=>{const r=res[cod];const pedido=(DIST.demand[sel]||{})[cod]||0;const got=r.recebe[sel]||0;if(pedido===0&&got===0)return'';ped+=pedido;rec+=got;
-      return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+pedido+'</td><td class="r num" style="color:var(--muted)">'+(+s.pct||0)+'%</td><td class="r"><span class="badge '+(got===pedido?'b-ok':'b-warn')+'">'+got+'</span></td></tr>';}).join('');
-    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+'</div><table><thead><tr><th>Cód.</th><th>Descrição</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 style="text-align:center;color:var(--muted);padding:22px">Esta loja não tem itens com pedido.</td></tr>')+'</tbody></table>';
+      return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+pedido+'</td><td class="r num" style="color:var(--muted)">'+(+s.pct||0)+'%</td><td class="r"><span class="badge '+(got===pedido?'b-ok':'b-warn')+'">'+got+'</span></td></tr>';}).join('');
+    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+'</div><table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:22px">Esta loja não tem itens com pedido.</td></tr>')+'</tbody></table>';
   }
 }
 function renderDistE2(){
   const res=distCompute();const body=$('#dist-e2-body');if(!body)return;
   const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0);
-  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Pedido (lojas)</th><th class="r">Disponível CD</th><th class="r">Distribuído</th><th class="r">Comprar</th></tr></thead><tbody>'+
-    (rows.length?rows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td class="r num">'+r.totalPed+'</td><td class="r num">'+r.disp+'</td><td class="r num" style="color:var(--muted)">'+r.dist+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=6 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
+  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th class="r">Pedido (lojas)</th><th class="r">Disponível CD</th><th class="r">Distribuído</th><th class="r">Comprar</th></tr></thead><tbody>'+
+    (rows.length?rows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(r.cod)+'</td><td class="r num">'+r.totalPed+'</td><td class="r num">'+r.disp+'</td><td class="r num" style="color:var(--muted)">'+r.dist+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
     '</tbody></table><div class="bd" style="border-top:1px solid var(--line2);text-align:right;font-size:12.5px;color:var(--muted)">Total a comprar: <b style="color:var(--warn);font-family:var(--mono)">'+fmt(rows.reduce((a,r)=>a+r.comprar,0))+'</b> un</div>';
 }
 function distEtapa(n){distStep=n;const e1=$('#dist-e1'),e2=$('#dist-e2');if(e1)e1.style.display=n===1?'':'none';if(e2)e2.style.display=n===2?'':'none';const s1=$('#dst-1'),s2=$('#dst-2');if(s1)s1.classList.toggle('on',n===1);if(s2)s2.classList.toggle('on',n===2);renderDist();}
@@ -1317,17 +1323,17 @@ function renderDist(){renderDistLojas();fillDistLojaSel();distCompute();if(distS
 function exportCarga(){
   const res=distCompute();const codes=distCodes();
   if(!codes.length){toast('Nada para exportar','warn');return;}
-  const aoa=[['Loja','Cod. Produto','Descricao','Vaga','Pediu','Recebe']];
-  DIST.stores.forEach(s=>{codes.forEach(cod=>{const r=res[cod];const got=r.recebe[s.id]||0;const pedido=(DIST.demand[s.id]||{})[cod]||0;if(got>0)aoa.push([s.name,cod,r.desc,r.vaga,pedido,got]);});});
-  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:20},{wch:14},{wch:42},{wch:12},{wch:8},{wch:8}];
+  const aoa=[['Loja','Cod. Produto','Descricao','Fornecedor','Vaga','Pediu','Recebe']];
+  DIST.stores.forEach(s=>{codes.forEach(cod=>{const r=res[cod];const got=r.recebe[s.id]||0;const pedido=(DIST.demand[s.id]||{})[cod]||0;if(got>0)aoa.push([s.name,cod,r.desc,r.forn,r.vaga,pedido,got]);});});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:14},{wch:42},{wch:22},{wch:12},{wch:8},{wch:8}];
   XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_lojas_'+stamp()+'.xlsx');toast('Carga exportada','ok');
 }
 function exportCompra(){
   const res=distCompute();const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0);
   if(!rows.length){toast('Nada a comprar','warn');return;}
-  const aoa=[['Cod. Produto','Descricao','Pedido Total','Disponivel CD','Distribuido','Comprar']];
-  rows.forEach(r=>aoa.push([r.cod,r.desc,r.totalPed,r.disp,r.dist,r.comprar]));
-  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:12},{wch:12},{wch:11},{wch:10}];
+  const aoa=[['Cod. Produto','Descricao','Fornecedor','Pedido Total','Disponivel CD','Distribuido','Comprar']];
+  rows.forEach(r=>aoa.push([r.cod,r.desc,r.forn,r.totalPed,r.disp,r.dist,r.comprar]));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:22},{wch:12},{wch:12},{wch:11},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'sugestao_compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
 }
 
