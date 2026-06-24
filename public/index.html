@@ -169,6 +169,21 @@
     body.navopen .side{transform:none;box-shadow:0 0 0 100vw rgba(8,18,40,.5)}
     .hamb{display:inline-flex;align-items:center;justify-content:center}
   }
+  /* ---- Distribuição ---- */
+  .steps{display:flex;gap:10px;margin-bottom:4px}
+  .step{flex:1;display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 15px;cursor:pointer;box-shadow:var(--shadow-sm);transition:.14s}
+  .step.on{border-color:var(--brand);box-shadow:0 10px 24px -14px rgba(31,111,224,.7)}
+  .step .no{width:30px;height:30px;border-radius:9px;background:#eef3fa;color:var(--muted);font-weight:800;display:flex;align-items:center;justify-content:center;flex:none;font-family:var(--mono)}
+  .step.on .no{background:var(--brand);color:#fff}
+  .step .tt{font-weight:700;font-size:13.5px}
+  .step .ds{color:var(--muted);font-size:11.5px}
+  .sumbadge{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;border-radius:9px;padding:5px 11px;font-family:var(--mono)}
+  .sumbadge.ok{background:var(--ok-bg);color:var(--ok)} .sumbadge.bad{background:var(--warn-bg);color:var(--warn)}
+  .split{display:flex;flex-wrap:wrap;gap:5px}
+  .sb{display:inline-flex;align-items:center;gap:5px;background:#f0f6ff;border:1px solid #d8e6fb;border-radius:7px;padding:2px 7px;font-size:11px;color:var(--brand-d)}
+  .sb b{font-family:var(--mono)}
+  .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
+  select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
 </style>
 </head>
 <body>
@@ -194,6 +209,8 @@
     <button class="nav on" id="nav-contagem" onclick="switchTab('contagem')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 5h2v14H3zM6 5h1v14H6zM8 5h2v14H8zM11 5h1v14h-1zM13 5h2v14h-2zM16 5h1v14h-1zM18 5h3v14h-3z"/></svg></span>Contagem</button>
     <button class="nav" id="nav-estoque" onclick="switchTab('estoque')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l9 4.5v11L12 22l-9-4.5v-11L12 2zm0 2.2L5 7.5 12 11l7-3.5L12 4.2z"/></svg></span>Estoque</button>
     <button class="nav" id="nav-vagas" onclick="switchTab('vagas')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z"/></svg></span>Almoxarifado</button>
+    <div class="nav-sec">Planejamento</div>
+    <button class="nav" id="nav-distribuicao" onclick="switchTab('distribuicao')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 014 4 4 4 0 01-2 3.4V11h5a2 2 0 012 2v2.6A4 4 0 0123 19a4 4 0 11-6-3.4V13h-4v2.6A4 4 0 0111 19a4 4 0 11-6-3.4V13a2 2 0 012-2h5V9.4A4 4 0 018 6a4 4 0 014-4z"/></svg></span>Distribuição</button>
     <div class="nav-sec">Movimentação</div>
     <button class="nav" id="nav-entrada" onclick="switchTab('entrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L11 12.2zM5 19h14v2H5z"/></svg></span>Entrada XML</button>
     <button class="nav" id="nav-baixa" onclick="switchTab('baixa')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M13 21h-2v-9.2L7.4 15.4 6 14l6-6 6 6-1.4 1.4L13 11.8zM5 3h14v2H5z"/></svg></span>Baixa</button>
@@ -393,6 +410,50 @@
     </div>
     <div class="note">Cada inventário finalizado fica guardado aqui com data e identificação. Você pode <b>gerar o Excel</b> de novo a qualquer momento, <b>reabrir</b> a contagem para ajustar ou <b>excluir</b>. Os dados ficam salvos neste navegador.</div>
   </section>
+  <!-- ============== DISTRIBUIÇÃO ============== -->
+  <section class="view" id="view-distribuicao" style="display:none">
+    <div class="steps">
+      <div class="step on" id="dst-1" onclick="distEtapa(1)"><div class="no">1</div><div><div class="tt">Montar cargas</div><div class="ds">reparte o disponível por % de cada loja</div></div></div>
+      <div class="step" id="dst-2" onclick="distEtapa(2)"><div class="no">2</div><div><div class="tt">Sugestão de compra</div><div class="ds">soma o que faltou em todas as lojas</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h3>Lojas e percentuais</h3><span class="sub">anexe o pedido de cada loja (Excel ou PDF do Microvix) e defina o %</span>
+        <div class="right"><span class="sumbadge" id="dist-sum">soma 0%</span><button class="btn sm" onclick="distDividirIgual()">Dividir igual</button><button class="btn sm pri" onclick="distAddLoja()">+ Loja</button></div>
+      </div>
+      <div class="bd" style="padding:0"><div class="tbl-scroll" id="dist-lojas"></div></div>
+    </div>
+
+    <div class="stats" style="margin-top:16px">
+      <div class="stat"><div class="l">Itens</div><div class="n" id="dist-k-itens">0</div></div>
+      <div class="stat"><div class="l">Disponível no CD</div><div class="n" id="dist-k-disp">0</div></div>
+      <div class="stat"><div class="l">Distribuído</div><div class="n" id="dist-k-dist">0</div></div>
+      <div class="stat"><div class="l">A comprar</div><div class="n" id="dist-k-buy">0</div></div>
+    </div>
+
+    <div id="dist-e1">
+      <div class="card">
+        <div class="hd"><h3>Cargas a montar</h3>
+          <div class="right"><span style="font-size:12px;color:var(--muted);font-weight:600">Ver:</span>
+            <select class="sel" id="dist-loja-sel" onchange="renderDistE1()"></select>
+            <button class="btn sm" onclick="exportCarga()">Exportar carga</button></div>
+        </div>
+        <div class="tbl-scroll" id="dist-e1-body"></div>
+      </div>
+    </div>
+
+    <div id="dist-e2" style="display:none">
+      <div class="card">
+        <div class="hd"><h3>Sugestão de compra</h3><span class="sub">pedido de todas as lojas − o que foi distribuído</span>
+          <div class="right"><button class="btn sm" onclick="exportCompra()">Exportar proposta</button></div></div>
+        <div class="tbl-scroll" id="dist-e2-body"></div>
+      </div>
+    </div>
+
+    <div class="note">Etapa 1: cada loja recebe <span class="mono">arredonda&darr;(% &times; disponível)</span>, sem passar do que pediu nem do que há no CD. Etapa 2: o que faltou (pedido &minus; recebido), somado de todas as lojas, vira a compra. Disponível e vaga vêm do seu estoque e do Almoxarifado.</div>
+
+    <input type="file" id="dist-file" accept=".xlsx,.xls,.csv,.pdf" onchange="onDistFile(event)">
+  </section>
     </div><!--content-->
   </div><!--main-->
 </div><!--shell-->
@@ -462,10 +523,10 @@ function onContagem(){return tab==='contagem';}
 function focusScan(){if(onContagem()&&!locked){const i=$('#scan');if(i)i.focus();}}
 
 /* ---------- tabs ---------- */
-var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos'};
+var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas'};
 function switchTab(t){
   tab=t;
-  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos'].forEach(v=>{
+  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao'].forEach(v=>{
     const sec=$('#view-'+v);if(sec)sec.style.display=t===v?'':'none';
     const nv=$('#nav-'+v);if(nv)nv.classList.toggle('on',t===v);
   });
@@ -477,6 +538,7 @@ function switchTab(t){
   else if(t==='entrada'){renderMov('entrada');}
   else if(t==='baixa'){renderMov('baixa');}
   else if(t==='vagas'){renderVagasRegistry();updateVagaDatalist();renderVagas();}
+  else if(t==='distribuicao'){renderDist();}
   else focusScan();
 }
 /* ---------- ESTOQUE (saldo do sistema) ---------- */
@@ -1135,6 +1197,140 @@ function exportVagas(){
 }
 
 
+/* ============== DISTRIBUIÇÃO ENTRE LOJAS ============== */
+const K_DIST='inv_dist_v1';
+let DIST={stores:[],demand:{}};
+let distStep=1, distFileTarget=null, distSeq=1;
+async function loadDist(){const d=await store.get(K_DIST);if(d&&Array.isArray(d.stores)){DIST={stores:d.stores,demand:d.demand||{}};distSeq=Math.max(1,...DIST.stores.map(s=>(+s.id||0)+1));}else{DIST={stores:[],demand:{}};}}
+async function persistDist(){await store.set(K_DIST,DIST);}
+function distEscAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function distNum(v){if(v==null||v==='')return 0;if(typeof v==='number')return Math.round(v);let s=String(v).trim().replace(/\s/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Math.round(parseFloat(s)||0);}
+function findCol(headers,terms,exclude){for(const t of terms)for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(exclude&&exclude.some(x=>h.includes(x)))continue;if(h.includes(t))return i;}return -1;}
+
+function distAddLoja(){const id=String(distSeq++);DIST.stores.push({id:id,name:'Loja '+(DIST.stores.length+1),pct:0});DIST.demand[id]={};persistDist();renderDistLojas();renderDist();}
+function distRemove(id){if(!confirm('Remover esta loja e o pedido dela?'))return;DIST.stores=DIST.stores.filter(s=>s.id!==id);delete DIST.demand[id];persistDist();renderDistLojas();renderDist();}
+function distSetName(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.name=v;persistDist();fillDistLojaSel();}}
+function distSetPct(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.pct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}}
+function distDividirIgual(){const n=DIST.stores.length;if(!n)return;const base=Math.floor(100/n);DIST.stores.forEach(s=>s.pct=base);DIST.stores[0].pct+=100-base*n;persistDist();renderDistLojas();renderDist();}
+function updateDistSum(){const t=DIST.stores.reduce((a,s)=>a+(+s.pct||0),0);const el=$('#dist-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
+
+function distPick(id){distFileTarget=id;$('#dist-file').click();}
+function onDistFile(ev){
+  const f=ev.target.files[0];if(!f||!distFileTarget){ev.target.value='';return;}
+  const id=distFileTarget;const isPdf=/\.pdf$/i.test(f.name);
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      let map={};
+      if(isPdf){const {lines}=await readPdfBaixa(r.result);map=parseStorePdf(lines);}
+      else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
+      const n=Object.keys(map).length;
+      if(!n){toast('Não encontrei itens nesse arquivo. Se for PDF imagem, tente o Excel.','warn');}
+      else{DIST.demand[id]=map;await persistDist();const un=Object.values(map).reduce((a,b)=>a+b,0);toast((DIST.stores.find(s=>s.id===id)||{}).name+': '+n+' itens · '+fmt(un)+' un','ok');}
+      renderDistLojas();renderDist();
+    }catch(e){toast('Não consegui ler: '+e.message,'err');}
+  };
+  r.readAsArrayBuffer(f);ev.target.value='';distFileTarget=null;
+}
+function parseStoreSheet(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:''});
+  let hi=0;for(let i=0;i<Math.min(aoa.length,15);i++){if(aoa[i].filter(c=>String(c).trim()!=='').length>=2){hi=i;break;}}
+  const headers=aoa[hi].map(h=>String(h));
+  let iCod=findCol(headers,['codigo','cod.','cod ','produto','item','sku'],['barra','ean','gtin']);
+  if(iCod<0)iCod=findCol(headers,['codigo','cod','ean','gtin']);
+  let iQt=findCol(headers,['qtde solicitada','quantidade solicitada','qtd solicitada','solicitada','qtde','quantidade','qtd','quant']);
+  if(iCod<0||iQt<0)throw new Error('não achei as colunas de código e quantidade');
+  const map={};
+  for(let r=hi+1;r<aoa.length;r++){const row=aoa[r];if(!row)continue;const cod=cleanCode(row[iCod]);const qt=distNum(row[iQt]);if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;}
+  return map;
+}
+function parseStorePdf(lines){
+  const map={};
+  lines.forEach(l=>{
+    const m=l.match(/^(\d{3,})\b.*?(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/);
+    if(!m)return;
+    const cod=cleanCode(m[1]);const qt=distNum(m[2]);
+    if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;
+  });
+  return map;
+}
+
+function distCodes(){const set={};DIST.stores.forEach(s=>{const d=DIST.demand[s.id]||{};Object.keys(d).forEach(c=>{if(d[c]>0)set[c]=1;});});return Object.keys(set).sort();}
+function distCompute(){
+  const codes=distCodes();const res={};let kDisp=0,kDist=0,kBuy=0;
+  codes.forEach(cod=>{
+    const disp=saldoOf(cod);let remaining=disp;const recebe={};let dist=0,totalPed=0;
+    DIST.stores.forEach(s=>{
+      const pedido=(DIST.demand[s.id]||{})[cod]||0;totalPed+=pedido;
+      const cota=Math.floor(((+s.pct||0)/100)*disp);
+      const give=Math.max(0,Math.min(pedido,cota,remaining));
+      recebe[s.id]=give;remaining-=give;dist+=give;
+    });
+    const p=byCod[cod]||{};
+    res[cod]={cod,desc:p.desc||'',vaga:vagaOf(cod),disp,recebe,dist,sobra:disp-dist,totalPed,comprar:Math.max(0,totalPed-dist)};
+    kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;
+  });
+  const set=(id,v)=>{const e=$('#'+id);if(e)e.textContent=fmt(v);};
+  set('dist-k-itens',codes.length);set('dist-k-disp',kDisp);set('dist-k-dist',kDist);set('dist-k-buy',kBuy);
+  return res;
+}
+function distVagaPill(v){return v?'<span class="pill-vaga">'+v+'</span>':'<span style="color:var(--soft);font-size:11px">— sem vaga</span>';}
+
+function renderDistLojas(){
+  const el=$('#dist-lojas');if(!el)return;
+  if(!DIST.stores.length){el.innerHTML='<div class="empty"><div class="big">▦</div>Nenhuma loja ainda. Clique em &ldquo;+ Loja&rdquo;, dê o nome e anexe o pedido (Excel ou PDF).</div>';updateDistSum();return;}
+  el.innerHTML='<table><thead><tr><th style="width:36%">Loja</th><th class="r" style="width:90px">%</th><th>Pedido</th><th style="width:150px"></th></tr></thead><tbody>'+
+    DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);
+      return '<tr><td><input class="inl" value="'+distEscAttr(s.name)+'" onchange="distSetName(\''+s.id+'\',this.value)"></td>'+
+      '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"></td>'+
+      '<td>'+(itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>')+'</td>'+
+      '<td class="r"><button class="btn sm gho" onclick="distPick(\''+s.id+'\')">anexar</button> <button class="btn sm gho dgr" onclick="distRemove(\''+s.id+'\')">remover</button></td></tr>';}).join('')+'</tbody></table>';
+  updateDistSum();
+}
+function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
+function renderDistE1(){
+  const res=distCompute();const sel=($('#dist-loja-sel')||{}).value||'__all';const body=$('#dist-e1-body');if(!body)return;
+  const codes=distCodes();
+  if(!codes.length){body.innerHTML='<div class="empty">Anexe os pedidos das lojas para montar as cargas.</div>';return;}
+  if(sel==='__all'){
+    body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra CD</th><th>Cada loja recebe</th></tr></thead><tbody>'+
+      codes.map(cod=>{const r=res[cod];const chips=DIST.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name.split(' ')[0])+' <b>'+r.recebe[s.id]+'</b></span>').join('');
+        return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td><td class="r"><span class="badge b-ok">'+r.dist+'</span></td><td class="r num" style="color:var(--muted)">'+r.sobra+'</td><td><div class="split">'+(chips||'<span style="color:var(--soft)">—</span>')+'</div></td></tr>';}).join('')+'</tbody></table>';
+  }else{
+    const s=DIST.stores.find(x=>x.id===sel);if(!s){body.innerHTML='';return;}let ped=0,rec=0;
+    const rows=codes.map(cod=>{const r=res[cod];const pedido=(DIST.demand[sel]||{})[cod]||0;const got=r.recebe[sel]||0;if(pedido===0&&got===0)return'';ped+=pedido;rec+=got;
+      return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+pedido+'</td><td class="r num" style="color:var(--muted)">'+(+s.pct||0)+'%</td><td class="r"><span class="badge '+(got===pedido?'b-ok':'b-warn')+'">'+got+'</span></td></tr>';}).join('');
+    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+'</div><table><thead><tr><th>Cód.</th><th>Descrição</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=6 style="text-align:center;color:var(--muted);padding:22px">Esta loja não tem itens com pedido.</td></tr>')+'</tbody></table>';
+  }
+}
+function renderDistE2(){
+  const res=distCompute();const body=$('#dist-e2-body');if(!body)return;
+  const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0);
+  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Pedido (lojas)</th><th class="r">Disponível CD</th><th class="r">Distribuído</th><th class="r">Comprar</th></tr></thead><tbody>'+
+    (rows.length?rows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td class="r num">'+r.totalPed+'</td><td class="r num">'+r.disp+'</td><td class="r num" style="color:var(--muted)">'+r.dist+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=6 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
+    '</tbody></table><div class="bd" style="border-top:1px solid var(--line2);text-align:right;font-size:12.5px;color:var(--muted)">Total a comprar: <b style="color:var(--warn);font-family:var(--mono)">'+fmt(rows.reduce((a,r)=>a+r.comprar,0))+'</b> un</div>';
+}
+function distEtapa(n){distStep=n;const e1=$('#dist-e1'),e2=$('#dist-e2');if(e1)e1.style.display=n===1?'':'none';if(e2)e2.style.display=n===2?'':'none';const s1=$('#dst-1'),s2=$('#dst-2');if(s1)s1.classList.toggle('on',n===1);if(s2)s2.classList.toggle('on',n===2);renderDist();}
+function renderDist(){renderDistLojas();fillDistLojaSel();distCompute();if(distStep===1)renderDistE1();else renderDistE2();}
+
+function exportCarga(){
+  const res=distCompute();const codes=distCodes();
+  if(!codes.length){toast('Nada para exportar','warn');return;}
+  const aoa=[['Loja','Cod. Produto','Descricao','Vaga','Pediu','Recebe']];
+  DIST.stores.forEach(s=>{codes.forEach(cod=>{const r=res[cod];const got=r.recebe[s.id]||0;const pedido=(DIST.demand[s.id]||{})[cod]||0;if(got>0)aoa.push([s.name,cod,r.desc,r.vaga,pedido,got]);});});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:20},{wch:14},{wch:42},{wch:12},{wch:8},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_lojas_'+stamp()+'.xlsx');toast('Carga exportada','ok');
+}
+function exportCompra(){
+  const res=distCompute();const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0);
+  if(!rows.length){toast('Nada a comprar','warn');return;}
+  const aoa=[['Cod. Produto','Descricao','Pedido Total','Disponivel CD','Distribuido','Comprar']];
+  rows.forEach(r=>aoa.push([r.cod,r.desc,r.totalPed,r.disp,r.dist,r.comprar]));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:12},{wch:12},{wch:11},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'sugestao_compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
+}
+
 let APP_STARTED=false;
 async function startApp(){
   if(APP_STARTED)return; APP_STARTED=true;
@@ -1148,7 +1344,7 @@ async function startApp(){
   $('#cat-status').textContent='Cadastro: '+fmt(CATALOG.length)+' itens';
   const sess=await store.get(K_SESS);if(sess){counts=sess.counts||{};order=sess.order||[];reads=sess.reads||[];blocked=sess.blocked||0;if(sess.invId&&$('#inv-id'))$('#inv-id').value=sess.invId;}
   const hist=await store.get(K_HIST);if(hist&&Array.isArray(hist))SAVED=hist;
-  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();
+  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();
   renderStats();renderCount();renderCatalog();renderHistory();renderVagasRegistry();updateVagaDatalist();
   const invId=$('#inv-id');if(invId)invId.addEventListener('input',persistSession);
   const vc=$('#v-code');if(vc){vc.addEventListener('input',()=>{const p=lookup(vc.value.trim());if(p){const v=vagaOf(p.cod);$('#v-found').innerHTML='→ <b>'+p.desc+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo atual <b>'+fmt(saldoOf(p.cod))+'</b>'+(v?' · já na vaga <b>'+v+'</b>':' · sem vaga');}else $('#v-found').textContent=vc.value.trim()?'produto não encontrado na base':'';});
