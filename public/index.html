@@ -188,15 +188,15 @@
   #dist-loading .dl-box{background:#fff;border-radius:14px;padding:22px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);min-width:250px;max-width:80vw;text-align:center;font-size:13px;color:var(--ink)}
   #dist-loading .dl-spin{width:34px;height:34px;border:3px solid #dbe6f5;border-top-color:var(--brand);border-radius:50%;animation:dlspin .8s linear infinite}
   @keyframes dlspin{to{transform:rotate(360deg)}}
-  #dist-preview{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
-  #dist-preview .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
-  #dist-preview .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
-  #dist-preview .dp-tt{font-weight:800;font-size:15px}
-  #dist-preview .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
-  #dist-preview .dp-hd .btn{margin-left:auto}
-  #dist-preview .dp-body{overflow:auto;flex:1}
-  #dist-preview .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  #dist-preview .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
+  #dist-preview,#dist-hist,#dist-histview{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
+  #dist-preview .dp-box,#dist-hist .dp-box,#dist-histview .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
+  #dist-preview .dp-hd,#dist-hist .dp-hd,#dist-histview .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
+  #dist-preview .dp-tt,#dist-hist .dp-tt,#dist-histview .dp-tt{font-weight:800;font-size:15px}
+  #dist-preview .dp-sub,#dist-hist .dp-sub,#dist-histview .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  #dist-preview .dp-hd .btn,#dist-hist .dp-hd .btn,#dist-histview .dp-hd .btn{margin-left:auto}
+  #dist-preview .dp-body,#dist-hist .dp-body,#dist-histview .dp-body{overflow:auto;flex:1}
+  #dist-preview .dp-add,#dist-hist .dp-add,#dist-histview .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #dist-preview .dp-ft,#dist-hist .dp-ft,#dist-histview .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
 </style>
 </head>
 <body>
@@ -425,6 +425,13 @@
   </section>
   <!-- ============== DISTRIBUIÇÃO ============== -->
   <section class="view" id="view-distribuicao" style="display:none">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted)">O rascunho (pedidos e percentuais) fica salvo automaticamente.</div>
+      <div style="margin-left:auto;display:flex;gap:9px">
+        <button class="btn" onclick="openDistHist()"><svg viewBox="0 0 24 24" width="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v6h6M3 9a9 9 0 1 0 3-6.7L3 5"/><path d="M12 7v5l3 2"/></svg> Histórico</button>
+        <button class="btn pri" onclick="distFinalizar()"><svg viewBox="0 0 24 24" width="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l4 4L19 6"/></svg> Finalizar e salvar</button>
+      </div>
+    </div>
     <div class="steps">
       <div class="step on" id="dst-1" onclick="distEtapa(1)"><div class="no">1</div><div><div class="tt">Montar cargas</div><div class="ds">reparte o disponível por % de cada loja</div></div></div>
       <div class="step" id="dst-2" onclick="distEtapa(2)"><div class="no">2</div><div><div class="tt">Sugestão de compra</div><div class="ds">soma o que faltou em todas as lojas</div></div></div>
@@ -1482,6 +1489,77 @@ function exportCompra(){
   rows.forEach(r=>aoa.push([r.cod,r.desc,r.forn,r.totalPed,r.disp,r.dist,r.comprar]));
   const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:22},{wch:12},{wch:12},{wch:11},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'sugestao_compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
+}
+
+/* ===== Finalizar + Histórico de distribuições ===== */
+const K_DHIST='inv_disthist_idx';
+function distSnapshotData(){
+  const res=distCompute();const codes=distCodes();
+  const rows=codes.map(cod=>{const r=res[cod];return {cod:cod,desc:r.desc,forn:r.forn,vaga:r.vaga,disp:r.disp,dist:r.dist,sobra:r.sobra,totalPed:r.totalPed,comprar:r.comprar,recebe:Object.assign({},r.recebe)};});
+  const demand={};DIST.stores.forEach(s=>{demand[s.id]=Object.assign({},DIST.demand[s.id]||{});});
+  return {ts:Date.now(),cdPct:DIST.cdPct,stores:DIST.stores.map(s=>({id:s.id,name:s.name,pct:s.pct})),rows:rows,demand:demand};
+}
+async function distFinalizar(){
+  if(!distCodes().length){toast('Não há pedidos para finalizar','warn');return;}
+  if(!confirm('Finalizar esta distribuição e salvar no histórico?'))return;
+  const data=distSnapshotData();const id='d'+Date.now();
+  const itens=data.rows.length,distribuido=data.rows.reduce((a,r)=>a+r.dist,0),comprar=data.rows.reduce((a,r)=>a+r.comprar,0);
+  try{
+    await store.set('inv_disthist_'+id,data);
+    const idx=(await store.get(K_DHIST))||[];
+    idx.unshift({id:id,ts:data.ts,itens:itens,distribuido:distribuido,comprar:comprar});
+    if(idx.length>60)idx.length=60;
+    await store.set(K_DHIST,idx);
+    toast('Distribuição salva no histórico','ok');
+  }catch(e){toast('Não consegui salvar: '+e.message,'err');}
+}
+function distHistFmtDate(ts){try{return new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return ''+ts;}}
+async function openDistHist(){
+  let o=document.getElementById('dist-hist');
+  if(!o){o=document.createElement('div');o.id='dist-hist';document.body.appendChild(o);}
+  o.style.display='flex';o.innerHTML='<div class="dp-box"><div class="dp-hd"><div class="dp-tt">Histórico de distribuições</div><button class="btn sm gho" onclick="closeDistHist()">✕</button></div><div class="dp-body" id="dist-hist-body" style="padding:6px 0"><div class="empty">Carregando…</div></div></div>';
+  const idx=(await store.get(K_DHIST))||[];
+  const body=document.getElementById('dist-hist-body');
+  if(!idx.length){body.innerHTML='<div class="empty">Nenhuma distribuição salva ainda. Use “Finalizar e salvar”.</div>';return;}
+  body.innerHTML='<table><thead><tr><th>Data</th><th class="r">Itens</th><th class="r">Distribuído</th><th class="r">A comprar</th><th></th></tr></thead><tbody>'+
+    idx.map(m=>'<tr><td><b>'+distHistFmtDate(m.ts)+'</b></td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.distribuido)+'</td><td class="r num" style="color:var(--warn)">'+fmt(m.comprar)+'</td>'+
+      '<td class="r" style="white-space:nowrap"><button class="btn sm gho" onclick="distHistView(\''+m.id+'\')">ver</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'carga\')">carga</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'compra\')">compra</button> <button class="btn sm gho dgr" onclick="distHistDel(\''+m.id+'\')">excluir</button></td></tr>').join('')+'</tbody></table>';
+}
+function closeDistHist(){const o=document.getElementById('dist-hist');if(o)o.style.display='none';}
+async function distHistDel(id){
+  if(!confirm('Excluir esta distribuição do histórico?'))return;
+  try{const idx=((await store.get(K_DHIST))||[]).filter(m=>m.id!==id);await store.set(K_DHIST,idx);await store.del('inv_disthist_'+id);}catch(e){}
+  openDistHist();toast('Removida','ok');
+}
+async function distHistView(id){
+  const data=await store.get('inv_disthist_'+id);if(!data){toast('Não achei os dados','err');return;}
+  let o=document.getElementById('dist-histview');
+  if(!o){o=document.createElement('div');o.id='dist-histview';o.className='';document.body.appendChild(o);}
+  o.style.display='flex';
+  const resumo='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra</th><th>Cada loja recebe</th></tr></thead><tbody>'+
+    data.rows.map(r=>{const chips=data.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name)+' <b>'+r.recebe[s.id]+'</b></span>').join('');
+      return '<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'')+'</td><td>'+(r.forn||'<span style="color:var(--soft)">—</span>')+'</td><td>'+(r.vaga?'<span class="pill-vaga">'+r.vaga+'</span>':'<span style="color:var(--soft);font-size:11px">—</span>')+'</td><td class="r num">'+r.disp+'</td><td class="r"><span class="badge b-ok">'+r.dist+'</span></td><td class="r num" style="color:var(--muted)">'+r.sobra+'</td><td><div class="split">'+(chips||'—')+'</div></td></tr>';}).join('')+'</tbody></table>';
+  const compraRows=data.rows.filter(r=>r.comprar>0);
+  const compra='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th class="r">Pedido</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Comprar</th></tr></thead><tbody>'+
+    (compraRows.length?compraRows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'')+'</td><td>'+(r.forn||'—')+'</td><td class="r num">'+r.totalPed+'</td><td class="r num">'+r.disp+'</td><td class="r num" style="color:var(--muted)">'+r.dist+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:18px">Nada a comprar.</td></tr>')+'</tbody></table>';
+  o.innerHTML='<div class="dp-box" style="width:980px"><div class="dp-hd"><div><div class="dp-tt">Distribuição de '+distHistFmtDate(data.ts)+'</div><div class="dp-sub">CD reservou '+(data.cdPct||0)+'% · '+data.rows.length+' itens</div></div><button class="btn sm gho" onclick="document.getElementById(\'dist-histview\').style.display=\'none\'">✕</button></div>'+
+    '<div class="dp-body"><div style="padding:10px 16px 4px;font-weight:700;font-size:13px">Cargas por loja</div>'+resumo+'<div style="padding:14px 16px 4px;font-weight:700;font-size:13px">Sugestão de compra</div>'+compra+'</div>'+
+    '<div class="dp-ft"><button class="btn" onclick="distHistExport(\''+id+'\',\'carga\')">Exportar carga</button><button class="btn pri" onclick="distHistExport(\''+id+'\',\'compra\')">Exportar compra</button></div></div>';
+}
+async function distHistExport(id,tipo){
+  const data=await store.get('inv_disthist_'+id);if(!data){toast('Não achei os dados','err');return;}
+  if(tipo==='carga'){
+    const aoa=[['Loja','Cod. Produto','Descricao','Fornecedor','Vaga','Pediu','Recebe']];
+    data.stores.forEach(s=>{data.rows.forEach(r=>{const got=r.recebe[s.id]||0;const pediu=(data.demand[s.id]||{})[r.cod]||0;if(got>0)aoa.push([s.name,r.cod,r.desc,r.forn,r.vaga,pediu,got]);});});
+    const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:14},{wch:42},{wch:22},{wch:12},{wch:8},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_'+stamp()+'.xlsx');toast('Carga exportada','ok');
+  }else{
+    const rows=data.rows.filter(r=>r.comprar>0);
+    const aoa=[['Cod. Produto','Descricao','Fornecedor','Pedido Total','Disponivel CD','Distribuido','Comprar']];
+    rows.forEach(r=>aoa.push([r.cod,r.desc,r.forn,r.totalPed,r.disp,r.dist,r.comprar]));
+    const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:22},{wch:12},{wch:12},{wch:11},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
+  }
 }
 
 let APP_STARTED=false;
