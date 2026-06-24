@@ -188,6 +188,15 @@
   #dist-loading .dl-box{background:#fff;border-radius:14px;padding:22px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);min-width:250px;max-width:80vw;text-align:center;font-size:13px;color:var(--ink)}
   #dist-loading .dl-spin{width:34px;height:34px;border:3px solid #dbe6f5;border-top-color:var(--brand);border-radius:50%;animation:dlspin .8s linear infinite}
   @keyframes dlspin{to{transform:rotate(360deg)}}
+  #dist-preview{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
+  #dist-preview .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
+  #dist-preview .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
+  #dist-preview .dp-tt{font-weight:800;font-size:15px}
+  #dist-preview .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  #dist-preview .dp-hd .btn{margin-left:auto}
+  #dist-preview .dp-body{overflow:auto;flex:1}
+  #dist-preview .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #dist-preview .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
 </style>
 </head>
 <body>
@@ -1234,6 +1243,42 @@ function distOverlay(show,msg){
 }
 function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click();}
 function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+'?'))return;DIST.demand[id]={};persistDist();renderDistLojas();renderDist();toast('Pedido removido','ok');}
+
+let distPreview=null;
+function openDistPreview(id,map){
+  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]}))};
+  let o=document.getElementById('dist-preview');
+  if(!o){o=document.createElement('div');o.id='dist-preview';document.body.appendChild(o);}
+  renderDistPreview();o.style.display='flex';
+}
+function renderDistPreview(){
+  const o=document.getElementById('dist-preview');if(!o||!distPreview)return;
+  const st=DIST.stores.find(s=>s.id===distPreview.id)||{};const items=distPreview.items;
+  const tot=items.reduce((a,it)=>a+(+it.qtd||0),0);
+  o.innerHTML='<div class="dp-box"><div class="dp-hd"><div><div class="dp-tt">Confira o pedido — '+distEscAttr(st.name||'')+'</div>'+
+    '<div class="dp-sub">Lido do arquivo. Ajuste, remova ou adicione itens antes de confirmar. <b>'+items.length+' itens · '+fmt(tot)+' un</b></div></div>'+
+    '<button class="btn sm gho" onclick="closeDistPreview()">✕</button></div>'+
+    '<div class="dp-body"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtde</th><th></th></tr></thead><tbody>'+
+    (items.length?items.map((it,i)=>{const p=byCod[it.cod]||{};return '<tr><td class="mono">'+distEscAttr(it.cod)+'</td><td>'+(p.desc?distEscAttr(p.desc):'<span style="color:var(--warn)">não está no cadastro</span>')+'</td><td class="r"><input class="qty-in" type="number" min="0" value="'+(+it.qtd||0)+'" oninput="distPrevSet('+i+',this.value)"></td><td class="r"><button class="btn sm gho dgr" onclick="distPrevDel('+i+')">remover</button></td></tr>';}).join(''):'<tr><td colspan=4 style="text-align:center;color:var(--muted);padding:20px">Nada lido. Adicione os itens manualmente abaixo.</td></tr>')+
+    '</tbody></table></div>'+
+    '<div class="dp-add">+ adicionar item: <input id="dp-cod" placeholder="código" class="qty-in" style="width:120px;text-align:left;font-family:var(--mono)"> <input id="dp-qtd" type="number" min="0" placeholder="qtde" class="qty-in" style="width:80px"> <button class="btn sm" onclick="distPrevAdd()">adicionar</button></div>'+
+    '<div class="dp-ft"><button class="btn" onclick="closeDistPreview()">Cancelar</button><button class="btn pri" onclick="confirmDistPreview()">Confirmar pedido ('+fmt(tot)+' un)</button></div></div>';
+}
+function distPrevSet(i,v){if(!distPreview||!distPreview.items[i])return;distPreview.items[i].qtd=Math.max(0,parseInt(v)||0);
+  const tot=distPreview.items.reduce((a,it)=>a+(+it.qtd||0),0);
+  const sub=document.querySelector('#dist-preview .dp-sub b');if(sub)sub.textContent=distPreview.items.length+' itens · '+fmt(tot)+' un';
+  const ft=document.querySelector('#dist-preview .dp-ft .btn.pri');if(ft)ft.textContent='Confirmar pedido ('+fmt(tot)+' un)';}
+function distPrevDel(i){if(!distPreview)return;distPreview.items.splice(i,1);renderDistPreview();}
+function distPrevAdd(){if(!distPreview)return;const c=cleanCode(($('#dp-cod')||{}).value||'');const q=Math.max(0,parseInt(($('#dp-qtd')||{}).value)||0);if(!c||!q){toast('Informe código e quantidade','warn');return;}const ex=distPreview.items.find(it=>it.cod===c);if(ex)ex.qtd+=q;else distPreview.items.push({cod:c,qtd:q});renderDistPreview();}
+function closeDistPreview(){const o=document.getElementById('dist-preview');if(o)o.style.display='none';distPreview=null;}
+async function confirmDistPreview(){
+  if(!distPreview)return;const id=distPreview.id;const map={};
+  distPreview.items.forEach(it=>{const q=+it.qtd||0;if(it.cod&&q>0)map[it.cod]=(map[it.cod]||0)+q;});
+  DIST.demand[id]=map;await persistDist();
+  const un=Object.values(map).reduce((a,b)=>a+b,0);const st=DIST.stores.find(s=>s.id===id)||{};
+  closeDistPreview();renderDistLojas();renderDist();
+  toast((st.name||'Loja')+': '+Object.keys(map).length+' itens · '+fmt(un)+' un confirmados','ok');
+}
 function onDistFile(ev){
   const f=ev.target.files[0];if(!f||!distFileTarget){ev.target.value='';return;}
   const id=distFileTarget;const isPdf=/\.pdf$/i.test(f.name);
@@ -1241,15 +1286,15 @@ function onDistFile(ev){
   distOverlay(true,isPdf?'Lendo o PDF… isso pode demorar um pouco.':'Lendo a planilha…');
   const r=new FileReader();
   r.onload=async()=>{
+    let map={};
     try{
-      let map={};
       if(isPdf){const o=await readPdfBaixa(r.result);map=parseStorePdf(o.lines);}
       else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
-      const n=Object.keys(map).length;
-      if(!n){toast('Não encontrei itens nesse arquivo. Se for PDF imagem, tente o Excel.','warn');}
-      else{DIST.demand[id]=map;await persistDist();const un=Object.values(map).reduce((a,b)=>a+b,0);const st=DIST.stores.find(s=>s.id===id)||{};toast((st.name||'Loja')+': '+n+' itens · '+fmt(un)+' un','ok');}
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
-    finally{distBusy=null;distOverlay(false);renderDistLojas();renderDist();}
+    distBusy=null;distOverlay(false);renderDistLojas();
+    const n=Object.keys(map).length;
+    if(!n){toast('Não encontrei itens nesse arquivo. Confira se é a requisição certa.','warn');return;}
+    openDistPreview(id,map);
   };
   r.onerror=()=>{distBusy=null;distOverlay(false);toast('Erro ao abrir o arquivo','err');renderDistLojas();};
   r.readAsArrayBuffer(f);ev.target.value='';
@@ -1268,8 +1313,23 @@ function parseStoreSheet(wb){
   return map;
 }
 function parseStorePdf(lines){
-  const map={};
-  lines.forEach(l=>{const m=l.match(/^(\d{3,})\b.*?(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/);if(!m)return;const cod=cleanCode(m[1]);const qt=distNum(m[2]);if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;});
+  const map={};let cur=null;
+  const qtyOnly=/^(\d{1,6})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/; // requisicao solicitada atendida
+  const codeOnly=/^(\d{2,7})\s*$/;
+  const tail=/(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*$/;
+  const lead=/^(\d{2,7})\s+\S/;
+  const noise=/produto\(s\)|listad|p[aá]gina|linx\.|https?:|cnpj|insc|e-?mail|avenida|^obs\s*:/i;
+  lines.forEach(raw=>{
+    const line=String(raw||'').trim();if(!line)return;
+    if(noise.test(line))return;
+    let m;
+    if(m=line.match(qtyOnly)){ if(cur){const qt=distNum(m[2]);if(qt>0)map[cur]=(map[cur]||0)+qt;} cur=null; return; }
+    if(m=line.match(codeOnly)){ cur=m[1]; return; }
+    const lm=line.match(lead), tm=line.match(tail), hasText=/[A-Za-zÀ-ÿ]/.test(line);
+    if(lm&&tm&&hasText){ const qt=distNum(tm[1]);if(qt>0)map[lm[1]]=(map[lm[1]]||0)+qt; cur=null; return; }
+    if(lm){ cur=lm[1]; return; }
+    // linha de descrição/continuação -> ignora
+  });
   return map;
 }
 
