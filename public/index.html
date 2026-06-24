@@ -184,6 +184,10 @@
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
   select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
+  #dist-loading{position:fixed;inset:0;background:rgba(8,18,40,.45);display:none;align-items:center;justify-content:center;z-index:5000}
+  #dist-loading .dl-box{background:#fff;border-radius:14px;padding:22px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);min-width:250px;max-width:80vw;text-align:center;font-size:13px;color:var(--ink)}
+  #dist-loading .dl-spin{width:34px;height:34px;border:3px solid #dbe6f5;border-top-color:var(--brand);border-radius:50%;animation:dlspin .8s linear infinite}
+  @keyframes dlspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -1050,7 +1054,7 @@ function onBaixaFile(ev){
   }
   ev.target.value='';
 }
-function ocrStatus(t){const el=$('#ocr-status');if(el)el.textContent=t;}
+function ocrStatus(t){const el=$('#ocr-status');if(el)el.textContent=t;const d=document.getElementById('dist-load-msg');if(d)d.textContent=t;}
 async function readPdfBaixa(buf){
   const lib=window.pdfjsLib||window['pdfjs-dist/build/pdf'];
   if(!lib)throw new Error('PDF.js não carregou');
@@ -1221,10 +1225,20 @@ function distSetPct(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.pct=Mat
 function distDividirIgual(){const n=DIST.stores.length;if(!n)return;const rem=Math.max(0,100-(+DIST.cdPct||0));const base=Math.floor(rem/n);DIST.stores.forEach(s=>s.pct=base);DIST.stores[0].pct+=rem-base*n;persistDist();renderDistLojas();renderDist();}
 function updateDistSum(){const t=(+DIST.cdPct||0)+DIST.stores.reduce((a,s)=>a+(+s.pct||0),0);const el=$('#dist-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
 
-function distPick(id){distFileTarget=id;$('#dist-file').click();}
+let distBusy=null;
+function distOverlay(show,msg){
+  let o=document.getElementById('dist-loading');
+  if(!o){o=document.createElement('div');o.id='dist-loading';o.innerHTML='<div class="dl-box"><div class="dl-spin"></div><div id="dist-load-msg">Lendo…</div></div>';document.body.appendChild(o);}
+  if(msg){const m=document.getElementById('dist-load-msg');if(m)m.textContent=msg;}
+  o.style.display=show?'flex':'none';
+}
+function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click();}
+function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+'?'))return;DIST.demand[id]={};persistDist();renderDistLojas();renderDist();toast('Pedido removido','ok');}
 function onDistFile(ev){
   const f=ev.target.files[0];if(!f||!distFileTarget){ev.target.value='';return;}
   const id=distFileTarget;const isPdf=/\.pdf$/i.test(f.name);
+  distFileTarget=null;distBusy=id;renderDistLojas();
+  distOverlay(true,isPdf?'Lendo o PDF… isso pode demorar um pouco.':'Lendo a planilha…');
   const r=new FileReader();
   r.onload=async()=>{
     try{
@@ -1234,10 +1248,11 @@ function onDistFile(ev){
       const n=Object.keys(map).length;
       if(!n){toast('Não encontrei itens nesse arquivo. Se for PDF imagem, tente o Excel.','warn');}
       else{DIST.demand[id]=map;await persistDist();const un=Object.values(map).reduce((a,b)=>a+b,0);const st=DIST.stores.find(s=>s.id===id)||{};toast((st.name||'Loja')+': '+n+' itens · '+fmt(un)+' un','ok');}
-      renderDistLojas();renderDist();
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
+    finally{distBusy=null;distOverlay(false);renderDistLojas();renderDist();}
   };
-  r.readAsArrayBuffer(f);ev.target.value='';distFileTarget=null;
+  r.onerror=()=>{distBusy=null;distOverlay(false);toast('Erro ao abrir o arquivo','err');renderDistLojas();};
+  r.readAsArrayBuffer(f);ev.target.value='';
 }
 function parseStoreSheet(wb){
   const ws=wb.Sheets[wb.SheetNames[0]];
@@ -1286,11 +1301,12 @@ function renderDistLojas(){
   let rows='<tr style="background:#f0f6ff"><td><b>CD — fica no estoque</b></td>'+
     '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+DIST.cdPct||0)+'" oninput="distSetCdPct(this.value)"></td>'+
     '<td><span class="badge b-info">reserva do CD</span></td><td></td></tr>';
-  rows+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);
+  rows+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);const busy=distBusy===s.id;
+    const acts=busy?'<span class="badge b-info">lendo…</span>':('<button class="btn sm gho" onclick="distPick(\''+s.id+'\')">anexar pedido</button>'+(itens?' <button class="btn sm gho dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':''));
     return '<tr><td>'+distEscAttr(s.name)+'</td>'+
     '<td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"></td>'+
     '<td>'+(itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>')+'</td>'+
-    '<td class="r"><button class="btn sm gho" onclick="distPick(\''+s.id+'\')">anexar pedido</button></td></tr>';}).join('');
+    '<td class="r">'+acts+'</td></tr>';}).join('');
   el.innerHTML='<table><thead><tr><th style="width:36%">Destino</th><th class="r" style="width:90px">%</th><th>Pedido</th><th style="width:150px"></th></tr></thead><tbody>'+rows+'</tbody></table>';
   updateDistSum();
 }
