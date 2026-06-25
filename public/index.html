@@ -456,6 +456,7 @@
         <div class="hd"><h3>Cargas a montar</h3>
           <div class="right"><span style="font-size:12px;color:var(--muted);font-weight:600">Ver:</span>
             <select class="sel" id="dist-loja-sel" onchange="renderDistE1()"></select>
+            <button class="btn sm" id="dist-onlystock" onclick="distToggleStock()">Mostrar todos</button>
             <button class="btn sm" onclick="exportCarga()">Exportar carga</button></div>
         </div>
         <div class="tbl-scroll" id="dist-e1-body"></div>
@@ -1284,6 +1285,8 @@ const K_DIST='inv_dist_v2';
 const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['outlet','Outlet'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
 let DIST={cdPct:0,stores:[],demand:{}};
 let distStep=1, distFileTarget=null;
+let distOnlyStock=false;
+function distToggleStock(){distOnlyStock=!distOnlyStock;renderDistE1();}
 async function loadDist(){
   const d=(await store.get(K_DIST))||{};
   const sp=d.pct||{}, sd=d.demand||{};
@@ -1451,8 +1454,11 @@ function renderDistLojas(){
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
 function renderDistE1(){
   const res=distCompute();const sel=($('#dist-loja-sel')||{}).value||'__all';const body=$('#dist-e1-body');if(!body)return;
-  const codes=distCodes();
-  if(!codes.length){body.innerHTML='<div class="empty">Anexe os pedidos das lojas para montar as cargas.</div>';return;}
+  let codes=distCodes();
+  const btn=$('#dist-onlystock');if(btn){btn.textContent=distOnlyStock?'Mostrando só com saldo':'Só com saldo no CD';btn.classList.toggle('pri',distOnlyStock);}
+  if(distOnlyStock)codes=codes.filter(cod=>res[cod].disp>0);
+  if(!distCodes().length){body.innerHTML='<div class="empty">Anexe os pedidos das lojas para montar as cargas.</div>';return;}
+  if(distOnlyStock&&!codes.length){body.innerHTML='<div class="empty">Nenhum produto pedido tem saldo no CD no momento.</div>';return;}
   if(sel==='__all'){
     body.innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra CD</th><th>Cada loja recebe</th></tr></thead><tbody>'+
       codes.map(cod=>{const r=res[cod];const chips=DIST.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name)+' <b>'+r.recebe[s.id]+'</b></span>').join('');
@@ -1461,7 +1467,7 @@ function renderDistE1(){
     const s=DIST.stores.find(x=>x.id===sel);if(!s){body.innerHTML='';return;}let ped=0,rec=0;
     const rows=codes.map(cod=>{const r=res[cod];const pedido=(DIST.demand[sel]||{})[cod]||0;const got=r.recebe[sel]||0;if(pedido===0&&got===0)return'';ped+=pedido;rec+=got;
       return '<tr><td class="mono">'+cod+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+pedido+'</td><td class="r num" style="color:var(--muted)">'+(+s.pct||0)+'%</td><td class="r"><span class="badge '+(got===pedido?'b-ok':'b-warn')+'">'+got+'</span></td></tr>';}).join('');
-    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+'</div><table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:22px">Esta loja não tem itens com pedido.</td></tr>')+'</tbody></table>';
+    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+(distOnlyStock?' · <span style="color:var(--brand)">só itens com saldo no CD</span>':'')+'</div><table><thead><tr><th>Cód.</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:22px">'+(distOnlyStock?'Esta loja não tem itens com saldo no CD.':'Esta loja não tem itens com pedido.')+'</td></tr>')+'</tbody></table>';
   }
 }
 function renderDistE2(){
