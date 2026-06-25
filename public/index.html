@@ -1523,7 +1523,7 @@ async function openDistHist(){
   if(!idx.length){body.innerHTML='<div class="empty">Nenhuma distribuição salva ainda. Use “Finalizar e salvar”.</div>';return;}
   body.innerHTML='<table><thead><tr><th>Data</th><th class="r">Itens</th><th class="r">Distribuído</th><th class="r">A comprar</th><th></th></tr></thead><tbody>'+
     idx.map(m=>'<tr><td><b>'+distHistFmtDate(m.ts)+'</b></td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.distribuido)+'</td><td class="r num" style="color:var(--warn)">'+fmt(m.comprar)+'</td>'+
-      '<td class="r" style="white-space:nowrap"><button class="btn sm gho" onclick="distHistView(\''+m.id+'\')">ver</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'carga\')">carga</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'compra\')">compra</button> <button class="btn sm gho dgr" onclick="distHistDel(\''+m.id+'\')">excluir</button></td></tr>').join('')+'</tbody></table>';
+      '<td class="r" style="white-space:nowrap"><button class="btn sm gho" onclick="distHistView(\''+m.id+'\')">ver</button> <button class="btn sm" onclick="distHistEdit(\''+m.id+'\')">editar</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'carga\')">carga</button> <button class="btn sm gho" onclick="distHistExport(\''+m.id+'\',\'compra\')">compra</button> <button class="btn sm gho dgr" onclick="distHistDel(\''+m.id+'\')">excluir</button></td></tr>').join('')+'</tbody></table>';
 }
 function closeDistHist(){const o=document.getElementById('dist-hist');if(o)o.style.display='none';}
 async function distHistDel(id){
@@ -1544,7 +1544,20 @@ async function distHistView(id){
     (compraRows.length?compraRows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+(r.desc||'')+'</td><td>'+(r.forn||'—')+'</td><td class="r num">'+r.totalPed+'</td><td class="r num">'+r.disp+'</td><td class="r num" style="color:var(--muted)">'+r.dist+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:18px">Nada a comprar.</td></tr>')+'</tbody></table>';
   o.innerHTML='<div class="dp-box" style="width:980px"><div class="dp-hd"><div><div class="dp-tt">Distribuição de '+distHistFmtDate(data.ts)+'</div><div class="dp-sub">CD reservou '+(data.cdPct||0)+'% · '+data.rows.length+' itens</div></div><button class="btn sm gho" onclick="document.getElementById(\'dist-histview\').style.display=\'none\'">✕</button></div>'+
     '<div class="dp-body"><div style="padding:10px 16px 4px;font-weight:700;font-size:13px">Cargas por loja</div>'+resumo+'<div style="padding:14px 16px 4px;font-weight:700;font-size:13px">Sugestão de compra</div>'+compra+'</div>'+
-    '<div class="dp-ft"><button class="btn" onclick="distHistExport(\''+id+'\',\'carga\')">Exportar carga</button><button class="btn pri" onclick="distHistExport(\''+id+'\',\'compra\')">Exportar compra</button></div></div>';
+    '<div class="dp-ft"><button class="btn" onclick="distHistExport(\''+id+'\',\'carga\')">Exportar carga</button><button class="btn" onclick="distHistExport(\''+id+'\',\'compra\')">Exportar compra</button><button class="btn pri" onclick="distHistEdit(\''+id+'\')">Editar esta distribuição</button></div></div>';
+}
+async function distHistEdit(id){
+  const data=await store.get('inv_disthist_'+id);if(!data){toast('Não achei os dados','err');return;}
+  if(!confirm('Abrir esta distribuição para editar? Isto substitui os pedidos e percentuais que estão na tela agora.'))return;
+  DIST.cdPct=+data.cdPct||0;
+  const pctById={},demById={};
+  (data.stores||[]).forEach(s=>{pctById[s.id]=s.pct;demById[s.id]=(data.demand&&data.demand[s.id])?data.demand[s.id]:{};});
+  DIST.stores.forEach(s=>{ if(pctById[s.id]!=null)s.pct=pctById[s.id]; DIST.demand[s.id]=demById[s.id]?Object.assign({},demById[s.id]):{}; });
+  await persistDist();
+  const hv=document.getElementById('dist-histview');if(hv)hv.style.display='none';
+  closeDistHist();
+  switchTab('distribuicao');distEtapa(1);
+  toast('Distribuição carregada para edição','ok');
 }
 async function distHistExport(id,tipo){
   const data=await store.get('inv_disthist_'+id);if(!data){toast('Não achei os dados','err');return;}
