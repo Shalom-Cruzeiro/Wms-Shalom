@@ -394,6 +394,19 @@
       </div>
     </div>
     <div class="card">
+      <div class="hd"><h3>Gerar vagas em massa</h3><span class="sub">cria todas de uma vez — ex.: corredores A–E, blocos 1–4, níveis 1–4 = 80 vagas (A-1.1 … E-4.4)</span></div>
+      <div class="bd">
+        <div class="form-row">
+          <div class="fld"><label>Corredores</label><input class="t mono" id="gv-corr" value="A-E" oninput="gvPreview()" placeholder="A-E  ou  A,B,C"></div>
+          <div class="fld" style="flex:none;width:170px"><label>Blocos (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-b1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-b2" type="number" min="1" value="4" oninput="gvPreview()"></div></div>
+          <div class="fld" style="flex:none;width:170px"><label>Níveis (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-n1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-n2" type="number" min="1" value="4" oninput="gvPreview()"></div></div>
+          <button class="btn pri" onclick="gerarVagas()">Gerar</button>
+        </div>
+        <div id="gv-preview" style="margin-top:10px;color:var(--muted);font-size:12.5px"></div>
+        <div style="margin-top:12px;border-top:1px solid var(--line2);padding-top:10px"><button class="btn sm gho dgr" onclick="apagarTodasVagas()">Apagar todas as vagas</button></div>
+      </div>
+    </div>
+    <div class="card">
       <div class="hd"><h3>Endereçar produto</h3><span class="sub">bipe o produto e escolha a vaga — a quantidade vem do saldo atual</span></div>
       <div class="bd">
         <div class="form-row">
@@ -1223,8 +1236,29 @@ function renderVagasRegistry(){
   const cont={};Object.values(ALLOC).forEach(v=>cont[v]=(cont[v]||0)+1);
   $('#vreg-sub').textContent=VAGAS.length+' vaga(s)';
   const el=$('#vreg-list');
-  if(!VAGAS.length){el.innerHTML='<span style="color:var(--muted);font-size:12.5px">Nenhuma vaga cadastrada. Adicione as vagas do seu almoxarifado acima.</span>';return;}
-  el.innerHTML=VAGAS.map(v=>`<span class="pill-vaga">${v}${cont[v]?`<span class="vc">${cont[v]}</span>`:''}<button onclick="removeVaga('${v}')" title="remover">×</button></span>`).join('');
+  if(!VAGAS.length){el.innerHTML='<span style="color:var(--muted);font-size:12.5px">Nenhuma vaga cadastrada. Use “Gerar vagas em massa” abaixo ou adicione acima.</span>';}
+  else el.innerHTML=VAGAS.map(v=>`<span class="pill-vaga">${v}${cont[v]?`<span class="vc">${cont[v]}</span>`:''}<button onclick="removeVaga('${v}')" title="remover">×</button></span>`).join('');
+  gvPreview();
+}
+function gvParseCorr(raw){raw=String(raw||'').trim().toUpperCase();let c=[];if(/^[A-Z]\s*-\s*[A-Z]$/.test(raw)){const a=raw.charCodeAt(0),b=raw.charCodeAt(raw.length-1);for(let i=Math.min(a,b);i<=Math.max(a,b);i++)c.push(String.fromCharCode(i));}else c=raw.split(/[\s,;]+/).filter(Boolean);return c;}
+function gvPreview(){const el=$('#gv-preview');if(!el)return;const c=gvParseCorr($('#gv-corr').value);const b1=parseInt($('#gv-b1').value)||1,b2=parseInt($('#gv-b2').value)||1,n1=parseInt($('#gv-n1').value)||1,n2=parseInt($('#gv-n2').value)||1;const nb=Math.abs(b2-b1)+1,nn=Math.abs(n2-n1)+1;const total=c.length*nb*nn;const ex=c.length?(c[0]+'-'+Math.min(b1,b2)+'.'+Math.min(n1,n2)+'  …  '+c[c.length-1]+'-'+Math.max(b1,b2)+'.'+Math.max(n1,n2)):'—';el.innerHTML='Vai gerar <b style="color:var(--ink)">'+total+'</b> vaga(s): <span class="mono">'+ex+'</span>';}
+function gerarVagas(){
+  const corrs=gvParseCorr($('#gv-corr').value);
+  if(!corrs.length){toast('Informe os corredores (ex.: A-E)','warn');return;}
+  const b1=parseInt($('#gv-b1').value)||1,b2=parseInt($('#gv-b2').value)||1,n1=parseInt($('#gv-n1').value)||1,n2=parseInt($('#gv-n2').value)||1;
+  const novas=[];
+  corrs.forEach(c=>{for(let b=Math.min(b1,b2);b<=Math.max(b1,b2);b++){for(let n=Math.min(n1,n2);n<=Math.max(n1,n2);n++){novas.push(c+'-'+b+'.'+n);}}});
+  let add=0;novas.forEach(v=>{if(!VAGAS.includes(v)){VAGAS.push(v);add++;}});
+  VAGAS.sort();persistVagas();renderVagasRegistry();updateVagaDatalist();renderVagas();
+  toast(add+' vaga(s) criada(s)'+(novas.length-add?(' · '+(novas.length-add)+' já existiam'):''),'ok');
+}
+function apagarTodasVagas(){
+  if(!VAGAS.length){toast('Não há vagas','warn');return;}
+  const emUso=Object.keys(ALLOC).length;
+  if(!confirm('Apagar TODAS as '+VAGAS.length+' vagas?'+(emUso?' Atenção: '+emUso+' produto(s) endereçado(s) ficarão sem vaga.':'')))return;
+  if(emUso){ALLOC={};persistAlloc();}
+  VAGAS=[];persistVagas();renderVagasRegistry();updateVagaDatalist();renderVagas();
+  toast('Todas as vagas foram apagadas','ok');
 }
 function alocar(){
   const code=$('#v-code').value.trim(), vaga=$('#v-vaga').value.trim().toUpperCase();
