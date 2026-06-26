@@ -194,15 +194,15 @@
   #dist-loading .dl-box{background:#fff;border-radius:14px;padding:22px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);min-width:250px;max-width:80vw;text-align:center;font-size:13px;color:var(--ink)}
   #dist-loading .dl-spin{width:34px;height:34px;border:3px solid #dbe6f5;border-top-color:var(--brand);border-radius:50%;animation:dlspin .8s linear infinite}
   @keyframes dlspin{to{transform:rotate(360deg)}}
-  #dist-preview,#dist-hist,#dist-histview{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
-  #dist-preview .dp-box,#dist-hist .dp-box,#dist-histview .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
-  #dist-preview .dp-hd,#dist-hist .dp-hd,#dist-histview .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
-  #dist-preview .dp-tt,#dist-hist .dp-tt,#dist-histview .dp-tt{font-weight:800;font-size:15px}
-  #dist-preview .dp-sub,#dist-hist .dp-sub,#dist-histview .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
-  #dist-preview .dp-hd .btn,#dist-hist .dp-hd .btn,#dist-histview .dp-hd .btn{margin-left:auto}
-  #dist-preview .dp-body,#dist-hist .dp-body,#dist-histview .dp-body{overflow:auto;flex:1}
-  #dist-preview .dp-add,#dist-hist .dp-add,#dist-histview .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  #dist-preview .dp-ft,#dist-hist .dp-ft,#dist-histview .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
+  #dist-preview,#dist-hist,#dist-histview,#de-cargas{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
+  #dist-preview .dp-box,#dist-hist .dp-box,#dist-histview .dp-box,#de-cargas .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
+  #dist-preview .dp-hd,#dist-hist .dp-hd,#dist-histview .dp-hd,#de-cargas .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
+  #dist-preview .dp-tt,#dist-hist .dp-tt,#dist-histview .dp-tt,#de-cargas .dp-tt{font-weight:800;font-size:15px}
+  #dist-preview .dp-sub,#dist-hist .dp-sub,#dist-histview .dp-sub,#de-cargas .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  #dist-preview .dp-hd .btn,#dist-hist .dp-hd .btn,#dist-histview .dp-hd .btn,#de-cargas .dp-hd .btn{margin-left:auto}
+  #dist-preview .dp-body,#dist-hist .dp-body,#dist-histview .dp-body,#de-cargas .dp-body{overflow:auto;flex:1}
+  #dist-preview .dp-add,#dist-hist .dp-add,#dist-histview .dp-add,#de-cargas .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #dist-preview .dp-ft,#dist-hist .dp-ft,#dist-histview .dp-ft,#de-cargas .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
 </style>
 </head>
 <body>
@@ -534,7 +534,11 @@
 
     <div class="card" style="margin-top:16px">
       <div class="hd"><h3>Produtos da nota</h3><span class="sub" id="de-prod-sub">importe um XML para começar</span>
-        <div class="right"><button class="btn sm" onclick="divEntGerarCargas()">Gerar cargas</button></div>
+        <div class="right">
+          <input class="t" id="de-prod-filter" placeholder="filtrar produto…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderDivEntProds()">
+          <select class="sel" id="de-prod-loja" onchange="renderDivEntProds()"></select>
+          <button class="btn sm" onclick="openCargasView()">Gerar cargas</button>
+        </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="de-prod-body"><div class="empty">Importe o XML da nota de entrada.</div></div></div>
     </div>
@@ -1844,7 +1848,7 @@ function divEntCompute(){
 }
 function renderDivEnt(){
   const st=$('#de-loja-status');if(st)st.innerHTML=Object.keys(LOJAEST).length?('Estoque por loja: <b style="color:var(--ok)">'+fmt(Object.keys(LOJAEST).length)+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';
-  renderDeDests();deUpdateModeBtns();renderDivEntProds();
+  renderDeDests();deUpdateModeBtns();fillDeLojaSel();renderDivEntProds();
 }
 function renderDeDests(){
   const el=$('#de-dests');if(!el)return;
@@ -1855,21 +1859,55 @@ function renderDeDests(){
   deUpdateSum();
 }
 function deShortName(d){return d.id==='cd'?'CD':d.name.replace(/^Loja\s+/i,'');}
+function fillDeLojaSel(){const sel=$('#de-prod-loja');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas</option>'+entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(deShortName(d))+'</option>').join('');if(cur)sel.value=cur;}
 function renderDivEntProds(){
   const body=$('#de-prod-body');if(!body)return;
   if(!ENT.items.length){body.innerHTML='<div class="empty">Importe o XML da nota de entrada.</div>';const s=$('#de-prod-sub');if(s)s.textContent='importe um XML para começar';['de-k-itens','de-k-rec','de-k-dist'].forEach(id=>{const e=$('#'+id);if(e)e.textContent='0';});return;}
   const alloc=divEntCompute();const ds=entDests();let kRec=0,kDist=0;
+  // KPIs sobre tudo
+  ENT.items.forEach(it=>{const a=alloc[it.cod]||{};kRec+=(+it.qtd||0);kDist+=Object.values(a).reduce((x,y)=>x+y,0);});
+  // filtros
+  const terms=norm(($('#de-prod-filter')||{}).value||'').split(/\s+/).filter(Boolean);
+  const lojaF=(($('#de-prod-loja')||{}).value)||'__all';
+  let items=ENT.items.map((it,i)=>({it,i}));
+  if(terms.length)items=items.filter(o=>{const hay=norm((o.it.desc||'')+' '+(o.it.ean||'')+' '+(o.it.cod||''));return terms.every(t=>hay.includes(t));});
+  if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
   const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Receb.</th>'+
-    ds.map(d=>'<th class="de-th'+(d.id==='cd'?'" style="background:#eef5ff"':'"')+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
-  const rows=ENT.items.map((it,i)=>{const a=alloc[it.cod]||{};const stock=LOJAEST[it.cod]||{};const distq=Object.values(a).reduce((x,y)=>x+y,0);kRec+=(+it.qtd||0);kDist+=distq;
+    ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
+  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=LOJAEST[it.cod]||{};const distq=Object.values(a).reduce((x,y)=>x+y,0);
     const overTot=distq!==(+it.qtd||0);
-    const cells=ds.map(d=>{const ed=ENT.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;
-      return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="deCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');
+    const cells=ds.map(d=>{const ed=ENT.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';
+      return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="deCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');
     return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
-  body.innerHTML=head+rows+'</tbody></table>';
-  const s=$('#de-prod-sub');if(s)s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens · <span style="color:var(--soft)">o nº pequeno em cinza é o estoque atual de cada loja</span>';
+  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+5)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
+  const s=$('#de-prod-sub');if(s)s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens'+(items.length!==ENT.items.length?' · '+items.length+' no filtro':'')+' · <span style="color:var(--soft)">o nº pequeno em cinza é o estoque atual</span>';
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
+function deCargasRows(){const alloc=divEntCompute();const ds=entDests();const out=[];ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,qtd:q});});});return out;}
+function openCargasView(){
+  if(!ENT.items.length){toast('Importe um XML primeiro','warn');return;}
+  let o=document.getElementById('de-cargas');if(!o){o=document.createElement('div');o.id='de-cargas';o.className='';document.body.appendChild(o);}
+  o.style.display='flex';renderCargasView();
+}
+function renderCargasView(){
+  const o=document.getElementById('de-cargas');if(!o)return;
+  const rows=deCargasRows();const ds=entDests();
+  const sel=document.getElementById('de-cargas-loja');const cur=sel?sel.value:'__all';
+  const filt=(cur&&cur!=='__all')?rows.filter(r=>r.destId===cur):rows;
+  // agrupa por destino
+  const groups={};filt.forEach(r=>{(groups[r.destId]=groups[r.destId]||[]).push(r);});
+  const order=ds.map(d=>d.id).filter(id=>groups[id]);
+  const body=order.map(id=>{const list=groups[id];const nm=id==='cd'?'CD (fica no estoque)':(ds.find(d=>d.id===id)||{}).name;const tot=list.reduce((a,r)=>a+r.qtd,0);
+    return '<div style="margin:6px 0 2px;padding:8px 16px;background:#f0f6ff;font-weight:700;font-size:13px;border-top:1px solid var(--line2)">'+distEscAttr(nm)+' · <span style="color:var(--muted);font-weight:600">'+list.length+' itens · '+fmt(tot)+' un</span></div>'+
+      '<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Enviar</th></tr></thead><tbody>'+
+      list.map(r=>'<tr><td class="mono">'+r.cod+'</td><td class="mono" style="font-size:11px;color:var(--muted)">'+(r.ean||'—')+'</td><td>'+(r.desc||'')+'</td><td class="r num"><b>'+r.qtd+'</b></td></tr>').join('')+'</tbody></table>';}).join('');
+  const opts='<option value="__all">Todas as lojas</option>'+ds.map(d=>'<option value="'+d.id+'"'+(cur===d.id?' selected':'')+'>'+distEscAttr(deShortName(d))+'</option>').join('');
+  o.innerHTML='<div class="dp-box" style="width:920px"><div class="dp-hd"><div><div class="dp-tt">Cargas a montar</div><div class="dp-sub">NF '+(ENT.docs.join(', ')||'—')+' · gere as cargas por destino</div></div>'+
+    '<div style="display:flex;gap:8px;align-items:center"><select class="sel" id="de-cargas-loja" onchange="renderCargasView()">'+opts+'</select><button class="btn sm gho" onclick="document.getElementById(\'de-cargas\').style.display=\'none\'">✕</button></div></div>'+
+    '<div class="dp-body">'+(body||'<div class="empty">Nada a enviar com a divisão atual.</div>')+'</div>'+
+    '<div class="dp-ft"><button class="btn pri" onclick="divEntGerarCargas()">Exportar Excel</button></div></div>';
+}
+function divEntDelItem(i){if(!ENT.items[i])return;const cod=ENT.items[i].cod;ENT.items.splice(i,1);delete ENT.over[cod];Object.keys(ENT.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete ENT.edited[k];});persistEnt();renderDivEntProds();}
 function deCellEdit(cod,dest,val){
   const it=ENT.items.find(x=>x.cod===cod);if(!it)return;
   if(!ENT.over[cod]){const alloc=divEntCompute();ENT.over[cod]=Object.assign({},alloc[cod]||{});}
@@ -1878,7 +1916,6 @@ function deCellEdit(cod,dest,val){
   ENT.edited[cod+'|'+dest]=1;
   persistEnt();renderDivEntProds();
 }
-function divEntDelItem(i){if(!ENT.items[i])return;const cod=ENT.items[i].cod;ENT.items.splice(i,1);delete ENT.over[cod];Object.keys(ENT.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete ENT.edited[k];});persistEnt();renderDivEntProds();}
 function divEntGerarCargas(){
   if(!ENT.items.length){toast('Sem produtos','warn');return;}
   const alloc=divEntCompute();const ds=entDests();
