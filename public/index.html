@@ -1827,23 +1827,31 @@ function divEntDividirVenda(){
   toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');
 }
 function divEntCompute(){
-  const ds=entDests();const out={};const haveStock=leN()>0;
+  const stores=FIXED_STORES.map(a=>a[0]);const haveStock=leN()>0;const out={};
   ENT.items.forEach(it=>{
     if(ENT.over[it.cod]){out[it.cod]=Object.assign({},ENT.over[it.cod]);return;}
-    const q=+it.qtd||0;const stock=leStock(it);
-    let weights;
-    if(haveStock){
-      let totalCur=0;const cur={};ds.forEach(d=>{cur[d.id]=stock[d.id]||0;totalCur+=cur[d.id];});
-      const grand=totalCur+q;
-      weights=ds.map(d=>({id:d.id,w:Math.max(0,((+ENT.pct[d.id]||0)/100)*grand-cur[d.id])}));
-      if(weights.reduce((a,o)=>a+o.w,0)<=0)weights=ds.map(d=>({id:d.id,w:(+ENT.pct[d.id]||0)}));
-    }else weights=ds.map(d=>({id:d.id,w:(+ENT.pct[d.id]||0)}));
-    const sumW=weights.reduce((a,o)=>a+o.w,0);const o={};
-    if(sumW>0&&q>0){
-      const raw=weights.map(o2=>({id:o2.id,exact:o2.w/sumW*q,base:0}));raw.forEach(r=>r.base=Math.floor(r.exact));
-      let rem=q-raw.reduce((a,r)=>a+r.base,0);
-      raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(r=>{if(rem>0){r.base++;rem--;}});
-      raw.forEach(r=>{if(r.base>0)o[r.id]=r.base;});
+    const q=+it.qtd||0;const o={};
+    if(q<=0){out[it.cod]=o;return;}
+    const cdPct=+ENT.pct['cd']||0;
+    let cdGive=Math.floor(cdPct/100*q+0.5);if(cdGive>q)cdGive=q;
+    let remaining=q-cdGive;
+    if(cdGive>0)o['cd']=cdGive;
+    if(remaining>0){
+      const stock=leStock(it);const sumStorePct=stores.reduce((a,id)=>a+(+ENT.pct[id]||0),0);
+      let weights;
+      if(haveStock&&sumStorePct>0){
+        const cur={};let sumCur=0;stores.forEach(id=>{cur[id]=stock[id]||0;sumCur+=cur[id];});
+        const grand=sumCur+remaining;
+        weights=stores.map(id=>({id,w:Math.max(0,((+ENT.pct[id]||0)/sumStorePct)*grand-cur[id])}));
+        if(weights.reduce((a,o2)=>a+o2.w,0)<=0)weights=stores.map(id=>({id,w:(+ENT.pct[id]||0)}));
+      }else weights=stores.map(id=>({id,w:(+ENT.pct[id]||0)}));
+      const sumW=weights.reduce((a,o2)=>a+o2.w,0);
+      if(sumW>0){
+        const raw=weights.map(o2=>({id:o2.id,exact:o2.w/sumW*remaining,base:0}));raw.forEach(r=>r.base=Math.floor(r.exact));
+        let rem=remaining-raw.reduce((a,r)=>a+r.base,0);
+        raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(r=>{if(rem>0){r.base++;rem--;}});
+        raw.forEach(r=>{if(r.base>0)o[r.id]=(o[r.id]||0)+r.base;});
+      }else o['cd']=(o['cd']||0)+remaining;
     }
     out[it.cod]=o;
   });
