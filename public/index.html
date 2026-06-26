@@ -181,6 +181,12 @@
   .sumbadge.ok{background:var(--ok-bg);color:var(--ok)} .sumbadge.bad{background:var(--warn-bg);color:var(--warn)}
   .split{display:flex;flex-wrap:wrap;gap:5px}
   .sb{display:inline-flex;align-items:center;gap:5px;background:#f0f6ff;border:1px solid #d8e6fb;border-radius:7px;padding:2px 7px;font-size:11px;color:var(--brand-d)}
+  .de-cell{padding:3px 4px!important;text-align:center;border-left:1px solid var(--line2)}
+  .de-cell.cd{background:#f5f9ff}
+  .de-stk{font-size:9.5px;color:var(--soft);line-height:1;margin-bottom:2px}
+  .de-cin{width:44px;text-align:center;font-family:var(--mono);font-size:12px;padding:4px 2px;border:1px solid var(--line);border-radius:6px;outline:none}
+  .de-cell.de-edited .de-cin{background:#fff3d6;border-color:#e6b34d;font-weight:700}
+  #view-diventrada .de-th{font-size:10.5px;text-align:center;border-left:1px solid var(--line2);white-space:nowrap;padding:6px 4px}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
   select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
@@ -513,8 +519,8 @@
       <div class="hd"><h3>Destinos e percentuais</h3><span class="sub">o CD também recebe — defina o % de cada um (deve somar 100%)</span>
         <div class="right">
           <span class="sumbadge" id="de-sum">soma 0%</span>
-          <button class="btn sm" onclick="divEntDividirIgual()">Dividir igual</button>
-          <button class="btn sm" onclick="divEntDividirVenda()" title="13 lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
+          <button class="btn sm" id="de-btn-igual" onclick="divEntDividirIgual()">Dividir igual</button>
+          <button class="btn sm" id="de-btn-venda" onclick="divEntDividirVenda()" title="13 lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
         </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="de-dests"></div></div>
@@ -1743,11 +1749,11 @@ async function distHistExport(id,tipo){
 const K_LOJAEST='inv_lojaest_v1', K_ENT='inv_diventrada_v1';
 const ENT_NUM2ID={'14':'cd','15':'itabira','16':'delrey','17':'betim','18':'outlet','19':'minas','20':'via','21':'cidade','22':'ipatinga','23':'itau','24':'boulevard','25':'valadares','26':'savassi','27':'estacao'};
 let LOJAEST={};
-let ENT={docs:[],items:[],pct:{},over:{}};
+let ENT={docs:[],items:[],pct:{},over:{},edited:{},mode:''};
 var deEditIdx=-1;
 function entDests(){return [{id:'cd',name:'CD (fica no estoque)'}].concat(FIXED_STORES.map(a=>({id:a[0],name:a[1]})));}
 async function loadLojaEst(){LOJAEST=(await store.get(K_LOJAEST))||{};}
-async function loadEnt(){const d=await store.get(K_ENT);if(d&&d.items)ENT=Object.assign({docs:[],items:[],pct:{},over:{}},d);}
+async function loadEnt(){const d=await store.get(K_ENT);if(d&&d.items)ENT=Object.assign({docs:[],items:[],pct:{},over:{},edited:{},mode:''},d);}
 async function persistEnt(){await store.set(K_ENT,ENT);}
 function parseLojaEstoque(aoa){
   let hi=-1;
@@ -1796,9 +1802,10 @@ function divEntLimpar(){
   if(!confirm('Limpar os produtos da nota e a divisão? (o estoque por loja importado é mantido)'))return;
   ENT.items=[];ENT.docs=[];ENT.over={};persistEnt();renderDivEnt();toast('Limpo','ok');
 }
-function deSetPct(id,v){ENT.pct[id]=Math.max(0,parseFloat(v)||0);persistEnt();deUpdateSum();renderDivEntProds();}
+function deSetPct(id,v){ENT.pct[id]=Math.max(0,parseFloat(v)||0);ENT.mode='manual';persistEnt();deUpdateSum();deUpdateModeBtns();renderDivEntProds();}
 function deUpdateSum(){const t=entDests().reduce((a,d)=>a+(+ENT.pct[d.id]||0),0);const el=$('#de-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
-function divEntDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.floor(100/n);ds.forEach(d=>ENT.pct[d.id]=base);ENT.pct[ds[0].id]+=100-base*n;persistEnt();renderDivEnt();}
+function deUpdateModeBtns(){['de-btn-igual','de-btn-venda'].forEach(id=>{const b=$('#'+id);if(b)b.classList.remove('pri');});const act={igual:'de-btn-igual',venda:'de-btn-venda'}[ENT.mode];if(act){const b=$('#'+act);if(b)b.classList.add('pri');}}
+function divEntDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.floor(100/n);ds.forEach(d=>ENT.pct[d.id]=base);ENT.pct[ds[0].id]+=100-base*n;ENT.over={};ENT.edited={};ENT.mode='igual';persistEnt();renderDivEnt();}
 function divEntDividirVenda(){
   if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}
   const cd=+ENT.pct['cd']||0;const rest=Math.max(0,100-cd);
@@ -1809,24 +1816,35 @@ function divEntDividirVenda(){
   let rem=rest-raw.reduce((a,o)=>a+o.base,0);
   raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});
   raw.forEach(o=>ENT.pct[o.id]=o.base);ENT.pct['cd']=cd;
-  persistEnt();renderDivEnt();
+  ENT.over={};ENT.edited={};ENT.mode='venda';persistEnt();renderDivEnt();
   toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');
 }
 function divEntCompute(){
-  const ds=entDests();const out={};
+  const ds=entDests();const out={};const haveStock=Object.keys(LOJAEST).length>0;
   ENT.items.forEach(it=>{
     if(ENT.over[it.cod]){out[it.cod]=Object.assign({},ENT.over[it.cod]);return;}
-    const q=+it.qtd||0;
-    const raw=ds.map(d=>{const exact=((+ENT.pct[d.id]||0)/100)*q;return {id:d.id,exact,base:Math.floor(exact)};});
-    let rem=q-raw.reduce((a,o)=>a+o.base,0);
-    raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});
-    const o={};raw.forEach(r=>{if(r.base>0)o[r.id]=r.base;});out[it.cod]=o;
+    const q=+it.qtd||0;const stock=LOJAEST[it.cod]||{};
+    let weights;
+    if(haveStock){
+      let totalCur=0;const cur={};ds.forEach(d=>{cur[d.id]=stock[d.id]||0;totalCur+=cur[d.id];});
+      const grand=totalCur+q;
+      weights=ds.map(d=>({id:d.id,w:Math.max(0,((+ENT.pct[d.id]||0)/100)*grand-cur[d.id])}));
+      if(weights.reduce((a,o)=>a+o.w,0)<=0)weights=ds.map(d=>({id:d.id,w:(+ENT.pct[d.id]||0)}));
+    }else weights=ds.map(d=>({id:d.id,w:(+ENT.pct[d.id]||0)}));
+    const sumW=weights.reduce((a,o)=>a+o.w,0);const o={};
+    if(sumW>0&&q>0){
+      const raw=weights.map(o2=>({id:o2.id,exact:o2.w/sumW*q,base:0}));raw.forEach(r=>r.base=Math.floor(r.exact));
+      let rem=q-raw.reduce((a,r)=>a+r.base,0);
+      raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(r=>{if(rem>0){r.base++;rem--;}});
+      raw.forEach(r=>{if(r.base>0)o[r.id]=r.base;});
+    }
+    out[it.cod]=o;
   });
   return out;
 }
 function renderDivEnt(){
   const st=$('#de-loja-status');if(st)st.innerHTML=Object.keys(LOJAEST).length?('Estoque por loja: <b style="color:var(--ok)">'+fmt(Object.keys(LOJAEST).length)+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';
-  renderDeDests();renderDivEntProds();
+  renderDeDests();deUpdateModeBtns();renderDivEntProds();
 }
 function renderDeDests(){
   const el=$('#de-dests');if(!el)return;
@@ -1836,37 +1854,31 @@ function renderDeDests(){
   el.innerHTML='<table><thead><tr><th>Destino</th><th class="r" style="width:90px">%</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
   deUpdateSum();
 }
+function deShortName(d){return d.id==='cd'?'CD':d.name.replace(/^Loja\s+/i,'');}
 function renderDivEntProds(){
   const body=$('#de-prod-body');if(!body)return;
   if(!ENT.items.length){body.innerHTML='<div class="empty">Importe o XML da nota de entrada.</div>';const s=$('#de-prod-sub');if(s)s.textContent='importe um XML para começar';['de-k-itens','de-k-rec','de-k-dist'].forEach(id=>{const e=$('#'+id);if(e)e.textContent='0';});return;}
-  const alloc=divEntCompute();const ds=entDests();
-  let kRec=0,kDist=0;
-  const rows=ENT.items.map((it,i)=>{const a=alloc[it.cod]||{};const distq=Object.values(a).reduce((x,y)=>x+y,0);kRec+=(+it.qtd||0);kDist+=distq;
-    const chips=ds.filter(d=>a[d.id]>0).map(d=>'<span class="sb">'+(d.id==='cd'?'CD':distEscAttr(d.name))+' <b>'+a[d.id]+'</b></span>').join('');
-    const over=ENT.over[it.cod]?'<span class="badge b-info" style="margin-left:6px">editado</span>':'';
-    return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11.5px">'+(it.ean||'—')+'</span></td><td>'+(it.desc||'(sem descrição)')+over+'</td><td class="r num"><b>'+(+it.qtd||0)+'</b></td><td><div class="split">'+(chips||'—')+'</div></td><td class="r" style="white-space:nowrap"><button class="btn sm gho" onclick="divEntEdit('+i+')">editar</button> <button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
-  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Recebido</th><th>Divisão (CD + lojas)</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
-  const s=$('#de-prod-sub');if(s)s.textContent='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens';
+  const alloc=divEntCompute();const ds=entDests();let kRec=0,kDist=0;
+  const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Receb.</th>'+
+    ds.map(d=>'<th class="de-th'+(d.id==='cd'?'" style="background:#eef5ff"':'"')+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
+  const rows=ENT.items.map((it,i)=>{const a=alloc[it.cod]||{};const stock=LOJAEST[it.cod]||{};const distq=Object.values(a).reduce((x,y)=>x+y,0);kRec+=(+it.qtd||0);kDist+=distq;
+    const overTot=distq!==(+it.qtd||0);
+    const cells=ds.map(d=>{const ed=ENT.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;
+      return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="deCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');
+    return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
+  body.innerHTML=head+rows+'</tbody></table>';
+  const s=$('#de-prod-sub');if(s)s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens · <span style="color:var(--soft)">o nº pequeno em cinza é o estoque atual de cada loja</span>';
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
-function divEntDelItem(i){if(!ENT.items[i])return;const cod=ENT.items[i].cod;ENT.items.splice(i,1);delete ENT.over[cod];persistEnt();renderDivEntProds();}
-function divEntEdit(i){
-  deEditIdx=i;const it=ENT.items[i];if(!it)return;
-  const ds=entDests();const alloc=divEntCompute();const cur=ENT.over[it.cod]||alloc[it.cod]||{};
-  let o=document.getElementById('de-edit');if(!o){o=document.createElement('div');o.id='de-edit';document.body.appendChild(o);}
-  o.style.display='flex';
-  const stock=LOJAEST[it.cod]||{};
-  const rows=ds.map(d=>'<tr><td>'+(d.id==='cd'?'<b>CD</b>':distEscAttr(d.name))+'</td><td class="r num" style="color:var(--muted)">'+(stock[d.id]||0)+'</td><td class="r"><input class="qty-in de-ein" data-dest="'+d.id+'" type="number" min="0" value="'+(cur[d.id]||0)+'" oninput="deEditSum()"></td></tr>').join('');
-  o.innerHTML='<div class="dp-box" style="width:560px"><div class="dp-hd"><div><div class="dp-tt">Editar divisão — '+distEscAttr(it.desc||it.cod)+'</div><div class="dp-sub">Recebido: <b>'+(+it.qtd||0)+'</b> un · Cód. '+it.cod+(Object.keys(stock).length?'':' · <span style="color:var(--warn)">sem estoque por loja importado</span>')+'</div></div><button class="btn sm gho" onclick="document.getElementById(\'de-edit\').style.display=\'none\'">✕</button></div>'+
-    '<div class="dp-body"><table><thead><tr><th>Destino</th><th class="r">Estoque atual</th><th class="r">Enviar</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="dp-ft"><div id="de-edit-sum" style="margin-right:auto;font-size:12.5px;color:var(--muted)"></div><button class="btn" onclick="divEntEditReset('+i+')">Voltar ao automático</button><button class="btn pri" onclick="divEntEditSave('+i+')">Salvar</button></div></div>';
-  deEditSum();
+function deCellEdit(cod,dest,val){
+  const it=ENT.items.find(x=>x.cod===cod);if(!it)return;
+  if(!ENT.over[cod]){const alloc=divEntCompute();ENT.over[cod]=Object.assign({},alloc[cod]||{});}
+  const q=Math.max(0,parseInt(val)||0);
+  if(q>0)ENT.over[cod][dest]=q;else delete ENT.over[cod][dest];
+  ENT.edited[cod+'|'+dest]=1;
+  persistEnt();renderDivEntProds();
 }
-function deEditSum(){const ins=[...document.querySelectorAll('#de-edit .de-ein')];const tot=ins.reduce((a,el)=>a+(parseInt(el.value)||0),0);const it=ENT.items[deEditIdx];const rec=it?+it.qtd||0:0;const el=document.getElementById('de-edit-sum');if(el)el.innerHTML='Enviando <b style="color:'+(tot===rec?'var(--ok)':'var(--warn)')+'">'+tot+'</b> de '+rec+' un';}
-function divEntEditSave(i){const it=ENT.items[i];if(!it)return;const ins=[...document.querySelectorAll('#de-edit .de-ein')];const o={};let tot=0;ins.forEach(el=>{const q=parseInt(el.value)||0;if(q>0){o[el.dataset.dest]=q;tot+=q;}});
-  if(tot>(+it.qtd||0)&&!confirm('A soma ('+tot+') passa do recebido ('+it.qtd+'). Salvar mesmo assim?'))return;
-  ENT.over[it.cod]=o;persistEnt();document.getElementById('de-edit').style.display='none';renderDivEntProds();toast('Divisão do produto salva','ok');}
-function divEntEditReset(i){const it=ENT.items[i];if(!it)return;delete ENT.over[it.cod];persistEnt();document.getElementById('de-edit').style.display='none';renderDivEntProds();toast('Voltou ao automático','ok');}
+function divEntDelItem(i){if(!ENT.items[i])return;const cod=ENT.items[i].cod;ENT.items.splice(i,1);delete ENT.over[cod];Object.keys(ENT.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete ENT.edited[k];});persistEnt();renderDivEntProds();}
 function divEntGerarCargas(){
   if(!ENT.items.length){toast('Sem produtos','warn');return;}
   const alloc=divEntCompute();const ds=entDests();
