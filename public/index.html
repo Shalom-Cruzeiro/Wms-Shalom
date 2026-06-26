@@ -1752,11 +1752,13 @@ async function distHistExport(id,tipo){
 /* ===== Dividir nova entrada (XML) ===== */
 const K_LOJAEST='inv_lojaest_v1', K_ENT='inv_diventrada_v1';
 const ENT_NUM2ID={'14':'cd','15':'itabira','16':'delrey','17':'betim','18':'outlet','19':'minas','20':'via','21':'cidade','22':'ipatinga','23':'itau','24':'boulevard','25':'valadares','26':'savassi','27':'estacao'};
-let LOJAEST={};
+let LOJAEST={byCod:{},byEan:{}};
 let ENT={docs:[],items:[],pct:{},over:{},edited:{},mode:''};
 var deEditIdx=-1;
 function entDests(){return [{id:'cd',name:'CD (fica no estoque)'}].concat(FIXED_STORES.map(a=>({id:a[0],name:a[1]})));}
-async function loadLojaEst(){LOJAEST=(await store.get(K_LOJAEST))||{};}
+function leN(){return LOJAEST&&LOJAEST.byCod?Object.keys(LOJAEST.byCod).length:0;}
+function leStock(it){if(!LOJAEST)return {};return (LOJAEST.byCod&&LOJAEST.byCod[it.cod])||(it&&it.ean&&LOJAEST.byEan&&LOJAEST.byEan[it.ean])||{};}
+async function loadLojaEst(){const d=await store.get(K_LOJAEST);if(d&&d.byCod)LOJAEST=d;else if(d&&typeof d==='object')LOJAEST={byCod:d,byEan:{}};else LOJAEST={byCod:{},byEan:{}};}
 async function loadEnt(){const d=await store.get(K_ENT);if(d&&d.items)ENT=Object.assign({docs:[],items:[],pct:{},over:{},edited:{},mode:''},d);}
 async function persistEnt(){await store.set(K_ENT,ENT);}
 function parseLojaEstoque(aoa){
@@ -1766,18 +1768,19 @@ function parseLojaEstoque(aoa){
   const colMap={};
   for(let rr=hi;rr<=hi+1;rr++){const row=aoa[rr]||[];for(let c=5;c<row.length;c++){const m=String(row[c]==null?'':row[c]).match(/^(\d{1,3})\s*-/);if(m&&ENT_NUM2ID[m[1]]&&colMap[c]==null)colMap[c]=ENT_NUM2ID[m[1]];}}
   if(!Object.keys(colMap).length)return null;
-  const map={};
+  const byCod={},byEan={};
   for(let i=hi+1;i<aoa.length;i++){const row=aoa[i]||[];const a=String(row[0]==null?'':row[0]).trim();if(!a)continue;const cod=cleanCode(a);if(!cod)continue;
     const o={};Object.keys(colMap).forEach(c=>{const v=row[c];const n=typeof v==='number'?Math.round(v):(parseInt(String(v).replace(/[^\d-]/g,''))||0);if(n)o[colMap[c]]=n;});
-    map[cod]=o;}
-  return map;
+    byCod[cod]=o;const ean=cleanCode(row[2]);if(ean)byEan[ean]=o;}
+  return {byCod,byEan};
 }
 function onLojaEstFile(ev){
   const f=ev.target.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=async()=>{try{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});const map=parseLojaEstoque(aoa);
-    if(!map||!Object.keys(map).length){toast('Não reconheci o arquivo de estoque por loja','warn');return;}
-    LOJAEST=map;await store.set(K_LOJAEST,LOJAEST);renderDivEnt();toast(Object.keys(map).length+' produtos com estoque por loja importados','ok');
+  r.onload=async()=>{try{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});const parsed=parseLojaEstoque(aoa);
+    if(!parsed||!Object.keys(parsed.byCod).length){toast('Não reconheci o arquivo de estoque por loja','warn');return;}
+    LOJAEST=parsed;const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
+    renderDivEnt();toast(Object.keys(parsed.byCod).length+' produtos com estoque por loja importados','ok');
   }catch(e){toast('Erro ao ler: '+e.message,'err');}};
   r.readAsArrayBuffer(f);ev.target.value='';
 }
@@ -1824,10 +1827,10 @@ function divEntDividirVenda(){
   toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');
 }
 function divEntCompute(){
-  const ds=entDests();const out={};const haveStock=Object.keys(LOJAEST).length>0;
+  const ds=entDests();const out={};const haveStock=leN()>0;
   ENT.items.forEach(it=>{
     if(ENT.over[it.cod]){out[it.cod]=Object.assign({},ENT.over[it.cod]);return;}
-    const q=+it.qtd||0;const stock=LOJAEST[it.cod]||{};
+    const q=+it.qtd||0;const stock=leStock(it);
     let weights;
     if(haveStock){
       let totalCur=0;const cur={};ds.forEach(d=>{cur[d.id]=stock[d.id]||0;totalCur+=cur[d.id];});
@@ -1847,7 +1850,7 @@ function divEntCompute(){
   return out;
 }
 function renderDivEnt(){
-  const st=$('#de-loja-status');if(st)st.innerHTML=Object.keys(LOJAEST).length?('Estoque por loja: <b style="color:var(--ok)">'+fmt(Object.keys(LOJAEST).length)+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';
+  const st=$('#de-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';
   renderDeDests();deUpdateModeBtns();fillDeLojaSel();renderDivEntProds();
 }
 function renderDeDests(){
@@ -1874,13 +1877,13 @@ function renderDivEntProds(){
   if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
   const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Receb.</th>'+
     ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
-  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=LOJAEST[it.cod]||{};const distq=Object.values(a).reduce((x,y)=>x+y,0);
+  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);
     const overTot=distq!==(+it.qtd||0);
     const cells=ds.map(d=>{const ed=ENT.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';
       return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="deCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');
     return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
   body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+5)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
-  const s=$('#de-prod-sub');if(s)s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens'+(items.length!==ENT.items.length?' · '+items.length+' no filtro':'')+' · <span style="color:var(--soft)">o nº pequeno em cinza é o estoque atual</span>';
+  const s=$('#de-prod-sub');if(s){const cov=leN()?ENT.items.filter(it=>Object.keys(leStock(it)).length).length:0;const covTxt=leN()?(' · <b style="color:'+(cov?'var(--ok)':'var(--warn)')+'">'+cov+'/'+ENT.items.length+' com estoque por loja</b>'):' · <span style="color:var(--warn)">importe o estoque por loja</span>';s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens'+(items.length!==ENT.items.length?' · '+items.length+' no filtro':'')+covTxt;}
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
 function deCargasRows(){const alloc=divEntCompute();const ds=entDests();const out=[];ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,qtd:q});});});return out;}
