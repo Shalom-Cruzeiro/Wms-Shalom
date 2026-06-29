@@ -231,6 +231,7 @@
     <div class="nav-sec">Planejamento</div>
     <button class="nav" id="nav-distribuicao" onclick="switchTab('distribuicao')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 014 4 4 4 0 01-2 3.4V11h5a2 2 0 012 2v2.6A4 4 0 0123 19a4 4 0 11-6-3.4V13h-4v2.6A4 4 0 0111 19a4 4 0 11-6-3.4V13a2 2 0 012-2h5V9.4A4 4 0 018 6a4 4 0 014-4z"/></svg></span>Distribuição</button>
     <button class="nav" id="nav-diventrada" onclick="switchTab('diventrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l9 4v6c0 5-3.8 8.5-9 10-5.2-1.5-9-5-9-10V6l9-4zm0 5a3 3 0 00-3 3h2a1 1 0 112 0c0 .6-.4 1-1 1.4-1 .6-1.6 1.3-1.6 2.6h2c0-.5.3-.8 1-1.2A3 3 0 0012 7zm-1 8v2h2v-2h-2z"/></svg></span>Dividir entrada</button>
+    <button class="nav" id="nav-rdist" onclick="switchTab('rdist')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v4h-7V3zm0 6h7v4h-7V9zm0 6h7v6h-7v-6zM3 12h7v9H3v-9z"/></svg></span>Distribuir estoque</button>
     <div class="nav-sec">Movimentação</div>
     <button class="nav" id="nav-entrada" onclick="switchTab('entrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L11 12.2zM5 19h14v2H5z"/></svg></span>Entrada XML</button>
     <button class="nav" id="nav-baixa" onclick="switchTab('baixa')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M13 21h-2v-9.2L7.4 15.4 6 14l6-6 6 6-1.4 1.4L13 11.8zM5 3h14v2H5z"/></svg></span>Baixa</button>
@@ -545,6 +546,66 @@
 
     <div class="note">A divisão de cada produto segue os percentuais acima (incluindo o CD). Você pode <b>editar um produto</b> para definir as quantidades na mão — nesse caso o estoque atual de cada loja aparece como referência. “Gerar cargas” exporta por destino (CD e lojas) com código, cód. de barras, descrição e quantidade a enviar.</div>
   </section>
+
+  <section class="view" id="view-rdist" style="display:none">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="font-size:12px;color:var(--muted)" id="rd-loja-status">Estoque por loja: não importado</div>
+      <div style="margin-left:auto;display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">Dividir o estoque:</span>
+        <select class="sel" id="rd-base" onchange="rdSetBase()">
+          <option value="cd">do CD (envia p/ lojas)</option>
+          <option value="total">total (CD + lojas)</option>
+        </select>
+        <button class="btn sm gho" onclick="document.getElementById('rd-loja-file').click()">Importar estoque por loja</button>
+        <input type="file" id="rd-loja-file" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
+        <button class="btn sm gho dgr" onclick="rdLimpar()">Limpar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h3>Selecionar produtos</h3><span class="sub">por fornecedor ou itens específicos — só entram itens com estoque para dividir</span></div>
+      <div class="bd">
+        <div class="form-row" style="align-items:flex-end">
+          <div class="fld"><label>Por fornecedor</label><select class="sel" id="rd-forn" style="width:100%"></select></div>
+          <button class="btn" onclick="rdAddForn()">Adicionar fornecedor</button>
+          <div class="fld" style="flex:1"><label>Ou por item (código, cód. barras ou descrição)</label><input class="t" id="rd-item" placeholder="buscar e Enter…" oninput="rdItemSuggest()" onkeydown="if(event.key==='Enter')rdAddFirstSuggest()"></div>
+        </div>
+        <div id="rd-suggest" style="margin-top:4px"></div>
+        <div id="rd-mix" style="margin-top:10px"></div>
+        <div style="margin-top:12px;display:flex;gap:9px;align-items:center"><button class="btn pri" onclick="rdFazerDivisao()">Fazer a divisão</button><span id="rd-mix-sub" style="font-size:12px;color:var(--muted)"></span></div>
+      </div>
+    </div>
+
+    <div class="card" id="rd-after" style="display:none;margin-top:16px">
+      <div class="hd"><h3>Destinos e percentuais</h3><span class="sub">o CD também recebe — defina o % de cada um (deve somar 100%)</span>
+        <div class="right">
+          <span class="sumbadge" id="rd-sum">soma 0%</span>
+          <button class="btn sm" id="rd-btn-igual" onclick="rdDividirIgual()">Dividir igual</button>
+          <button class="btn sm" id="rd-btn-venda" onclick="rdDividirVenda()" title="13 lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
+        </div>
+      </div>
+      <div class="bd" style="padding:0"><div class="tbl-scroll" id="rd-dests"></div></div>
+    </div>
+
+    <div class="stats" id="rd-stats" style="display:none;margin-top:16px;grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><div class="l">Itens</div><div class="n" id="rd-k-itens">0</div></div>
+      <div class="stat"><div class="l">Estoque a dividir (un)</div><div class="n" id="rd-k-rec">0</div></div>
+      <div class="stat"><div class="l">Distribuído (un)</div><div class="n" id="rd-k-dist">0</div></div>
+    </div>
+
+    <div class="card" id="rd-prodcard" style="display:none;margin-top:16px">
+      <div class="hd"><h3>Divisão por produto</h3><span class="sub" id="rd-prod-sub"></span>
+        <div class="right">
+          <input class="t" id="rd-prod-filter" placeholder="filtrar produto…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderRdistProds()">
+          <select class="sel" id="rd-prod-loja" onchange="renderRdistProds()"></select>
+          <button class="btn sm" onclick="openRdCargasView()">Gerar cargas</button>
+        </div>
+      </div>
+      <div class="bd" style="padding:0"><div class="tbl-scroll" id="rd-prod-body"></div></div>
+    </div>
+
+    <div class="note">Escolha os produtos, defina os percentuais e clique em <b>Fazer a divisão</b>. O “estoque a dividir” vem do inventário por loja (CD, ou CD + lojas, conforme o seletor lá em cima). A divisão considera o estoque atual de cada loja, manda mais para quem tem menos, e você pode ajustar célula a célula.</div>
+  </section>
     </div><!--content-->
   </div><!--main-->
 </div><!--shell-->
@@ -614,10 +675,10 @@ function onContagem(){return tab==='contagem';}
 function focusScan(){if(onContagem()&&!locked){const i=$('#scan');if(i)i.focus();}}
 
 /* ---------- tabs ---------- */
-var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada'};
+var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque'};
 function switchTab(t){
   tab=t;
-  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada'].forEach(v=>{
+  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist'].forEach(v=>{
     const sec=$('#view-'+v);if(sec)sec.style.display=t===v?'':'none';
     const nv=$('#nav-'+v);if(nv)nv.classList.toggle('on',t===v);
   });
@@ -631,6 +692,7 @@ function switchTab(t){
   else if(t==='vagas'){renderVagasRegistry();updateVagaDatalist();renderVagas();}
   else if(t==='distribuicao'){renderDist();}
   else if(t==='diventrada'){renderDivEnt();}
+  else if(t==='rdist'){renderRdist();}
   else focusScan();
 }
 /* ---------- ESTOQUE (saldo do sistema) ---------- */
@@ -1826,25 +1888,26 @@ function divEntDividirVenda(){
   ENT.over={};ENT.edited={};ENT.mode='venda';persistEnt();renderDivEnt();
   toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');
 }
-function divEntCompute(){
+function divEntCompute(S){
+  S=S||ENT;
   const stores=FIXED_STORES.map(a=>a[0]);const haveStock=leN()>0;const out={};
-  ENT.items.forEach(it=>{
-    if(ENT.over[it.cod]){out[it.cod]=Object.assign({},ENT.over[it.cod]);return;}
+  S.items.forEach(it=>{
+    if(S.over[it.cod]){out[it.cod]=Object.assign({},S.over[it.cod]);return;}
     const q=+it.qtd||0;const o={};
     if(q<=0){out[it.cod]=o;return;}
-    const cdPct=+ENT.pct['cd']||0;
+    const cdPct=+S.pct['cd']||0;
     let cdGive=Math.floor(cdPct/100*q+0.5);if(cdGive>q)cdGive=q;
     let remaining=q-cdGive;
     if(cdGive>0)o['cd']=cdGive;
     if(remaining>0){
-      const stock=leStock(it);const sumStorePct=stores.reduce((a,id)=>a+(+ENT.pct[id]||0),0);
+      const stock=leStock(it);const sumStorePct=stores.reduce((a,id)=>a+(+S.pct[id]||0),0);
       let weights;
       if(haveStock&&sumStorePct>0){
         const cur={};let sumCur=0;stores.forEach(id=>{cur[id]=stock[id]||0;sumCur+=cur[id];});
         const grand=sumCur+remaining;
-        weights=stores.map(id=>({id,w:Math.max(0,((+ENT.pct[id]||0)/sumStorePct)*grand-cur[id])}));
-        if(weights.reduce((a,o2)=>a+o2.w,0)<=0)weights=stores.map(id=>({id,w:(+ENT.pct[id]||0)}));
-      }else weights=stores.map(id=>({id,w:(+ENT.pct[id]||0)}));
+        weights=stores.map(id=>({id,w:Math.max(0,((+S.pct[id]||0)/sumStorePct)*grand-cur[id])}));
+        if(weights.reduce((a,o2)=>a+o2.w,0)<=0)weights=stores.map(id=>({id,w:(+S.pct[id]||0)}));
+      }else weights=stores.map(id=>({id,w:(+S.pct[id]||0)}));
       const sumW=weights.reduce((a,o2)=>a+o2.w,0);
       if(sumW>0){
         const raw=weights.map(o2=>({id:o2.id,exact:o2.w/sumW*remaining,base:0}));raw.forEach(r=>r.base=Math.floor(r.exact));
@@ -1937,6 +2000,48 @@ function divEntGerarCargas(){
   XLSX.utils.book_append_sheet(wb,ws,'Cargas entrada');XLSX.writeFile(wb,'cargas_entrada_'+stamp()+'.xlsx');toast('Cargas geradas','ok');
 }
 
+/* ===== Distribuir estoque (mix por fornecedor/itens) ===== */
+let RDIST={items:[],pct:{},over:{},edited:{},mode:'',base:'cd',done:false};
+const K_RDIST='inv_rdist_v1';
+async function loadRdist(){const d=await store.get(K_RDIST);if(d&&d.items)RDIST=Object.assign({items:[],pct:{},over:{},edited:{},mode:'',base:'cd',done:false},d);}
+async function persistRdist(){await store.set(K_RDIST,RDIST);}
+function rdBaseQty(cod){const s=(LOJAEST.byCod&&LOJAEST.byCod[cod])||{};if(RDIST.base==='total')return entDests().reduce((a,d)=>a+(s[d.id]||0),0);return s['cd']||0;}
+function rdRefreshQty(){RDIST.items.forEach(it=>{it.qtd=rdBaseQty(it.cod);});}
+function fillRdForn(){const sel=$('#rd-forn');if(!sel)return;const cur=sel.value;const set={};CATALOG.forEach(p=>{if(p.forn)set[p.forn]=(set[p.forn]||0)+1;});const forns=Object.keys(set).sort((a,b)=>a.localeCompare(b));sel.innerHTML='<option value="">— escolha um fornecedor —</option>'+forns.map(f=>'<option value="'+f.replace(/"/g,'&quot;')+'">'+distEscAttr(f)+' ('+set[f]+')</option>').join('');if(cur)sel.value=cur;}
+function rdAddItem(p,silent){if(!p)return false;if(RDIST.items.some(x=>x.cod===p.cod))return false;const q=rdBaseQty(p.cod);if(q<=0){if(!silent)toast('Sem estoque para dividir','warn');return false;}RDIST.items.push({cod:p.cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',qtd:q});return true;}
+function rdAddForn(){const f=($('#rd-forn')||{}).value;if(!f){toast('Escolha um fornecedor','warn');return;}let add=0;CATALOG.forEach(p=>{if((p.forn||'')===f){if(rdAddItem(p,true))add++;}});persistRdist();renderRdMix();if(RDIST.done){rdRefreshQty();renderRdistProds();}toast(add+' item(ns) do fornecedor com estoque adicionados','ok');}
+function rdItemSuggest(){const q=norm(($('#rd-item')||{}).value);const box=$('#rd-suggest');if(!box)return;if(q.length<2){box.innerHTML='';return;}const terms=q.split(/\s+/).filter(Boolean);const res=CATALOG.filter(p=>{const hay=norm((p.desc||'')+' '+((p.eans&&p.eans[0])||p.ean||'')+' '+p.cod+' '+(p.forn||''));return terms.every(t=>hay.includes(t));}).slice(0,8);box.innerHTML=res.length?res.map(p=>'<div class="rd-sg" onclick="rdAddByCod(\''+p.cod+'\')" style="padding:6px 10px;border:1px solid var(--line2);border-radius:8px;margin:3px 0;cursor:pointer;font-size:12.5px"><b>'+p.cod+'</b> · '+(p.desc||'')+' <span style="color:var(--soft)">'+(rdBaseQty(p.cod)||0)+' em estoque</span></div>').join(''):'<div style="color:var(--muted);font-size:12px;padding:4px">nada encontrado</div>';}
+function rdAddByCod(cod){const p=byCod[cod];if(rdAddItem(p)){persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}const i=$('#rd-item');if(i)i.value='';const s=$('#rd-suggest');if(s)s.innerHTML='';}
+function rdAddFirstSuggest(){const first=document.querySelector('#rd-suggest .rd-sg');if(first)first.click();}
+function renderRdMix(){const el=$('#rd-mix');if(!el)return;if(!RDIST.items.length){el.innerHTML='<div style="color:var(--muted);font-size:12.5px">Nenhum produto selecionado ainda.</div>';const s=$('#rd-mix-sub');if(s)s.textContent='';return;}el.innerHTML='<div class="split">'+RDIST.items.map((it,i)=>'<span class="sb">'+it.cod+' · '+distEscAttr((it.desc||'').slice(0,26))+' <b>'+(it.qtd||0)+'</b><button onclick="rdDelItem('+i+')" style="margin-left:4px;border:none;background:none;cursor:pointer;color:var(--err)">×</button></span>').join('')+'</div>';const tot=RDIST.items.reduce((a,it)=>a+(it.qtd||0),0);const s=$('#rd-mix-sub');if(s)s.textContent=RDIST.items.length+' itens · '+fmt(tot)+' un a dividir';}
+function rdDelItem(i){const it=RDIST.items[i];if(!it)return;const cod=it.cod;RDIST.items.splice(i,1);delete RDIST.over[cod];Object.keys(RDIST.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete RDIST.edited[k];});persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}
+function rdSetBase(){RDIST.base=($('#rd-base')||{}).value||'cd';rdRefreshQty();RDIST.over={};RDIST.edited={};persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}
+function rdLimpar(){if(!RDIST.items.length){toast('Já está vazio','warn');return;}if(!confirm('Limpar a seleção e a divisão?'))return;RDIST.items=[];RDIST.over={};RDIST.edited={};RDIST.done=false;persistRdist();renderRdist();}
+function rdFazerDivisao(){if(!RDIST.items.length){toast('Selecione produtos primeiro','warn');return;}if(!leN()){toast('Importe o estoque por loja primeiro','warn');return;}rdRefreshQty();if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);RDIST.done=true;persistRdist();renderRdist();const c=document.getElementById('rd-prodcard');if(c)c.scrollIntoView({behavior:'smooth',block:'nearest'});}
+function rdSetPct(id,v){RDIST.pct[id]=Math.max(0,parseFloat(v)||0);RDIST.mode='manual';persistRdist();rdUpdateSum();rdUpdateModeBtns();renderRdistProds();}
+function rdUpdateSum(){const t=entDests().reduce((a,d)=>a+(+RDIST.pct[d.id]||0),0);const el=$('#rd-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
+function rdUpdateModeBtns(){['rd-btn-igual','rd-btn-venda'].forEach(id=>{const b=$('#'+id);if(b)b.classList.remove('pri');});const act={igual:'rd-btn-igual',venda:'rd-btn-venda'}[RDIST.mode];if(act){const b=$('#'+act);if(b)b.classList.add('pri');}}
+function rdDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.floor(100/n);ds.forEach(d=>RDIST.pct[d.id]=base);RDIST.pct[ds[0].id]+=100-base*n;RDIST.over={};RDIST.edited={};RDIST.mode='igual';persistRdist();renderRdist();}
+function rdDividirVenda(){if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}const cd=+RDIST.pct['cd']||0;const rest=Math.max(0,100-cd);const lojas=FIXED_STORES.map(a=>a[0]);const total=lojas.reduce((a,id)=>a+(VENDAS[id]||0),0);if(total<=0){toast('Vendas zeradas','warn');return;}const raw=lojas.map(id=>{const exact=(VENDAS[id]||0)/total*rest;return {id,exact,base:Math.floor(exact)};});let rem=rest-raw.reduce((a,o)=>a+o.base,0);raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});raw.forEach(o=>RDIST.pct[o.id]=o.base);RDIST.pct['cd']=cd;RDIST.over={};RDIST.edited={};RDIST.mode='venda';persistRdist();renderRdist();toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');}
+function renderRdistDests(){const el=$('#rd-dests');if(!el)return;const rows=entDests().map(d=>{const isCd=d.id==='cd';return '<tr'+(isCd?' style="background:#f0f6ff"':'')+'><td>'+(isCd?'<b>'+distEscAttr(d.name)+'</b>':distEscAttr(d.name))+'</td><td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+RDIST.pct[d.id]||0)+'" oninput="rdSetPct(\''+d.id+'\',this.value)"></td><td>'+(isCd?'<span class="badge b-info">CD recebe</span>':'')+'</td></tr>';}).join('');el.innerHTML='<table><thead><tr><th>Destino</th><th class="r" style="width:90px">%</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';rdUpdateSum();}
+function fillRdLojaSel(){const sel=$('#rd-prod-loja');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas</option>'+entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(deShortName(d))+'</option>').join('');if(cur)sel.value=cur;}
+function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.done&&RDIST.items.length;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
+function renderRdistProds(){const body=$('#rd-prod-body');if(!body)return;const alloc=divEntCompute(RDIST);const ds=entDests();let kRec=0,kDist=0;RDIST.items.forEach(it=>{const a=alloc[it.cod]||{};kRec+=(+it.qtd||0);kDist+=Object.values(a).reduce((x,y)=>x+y,0);});
+  const terms=norm(($('#rd-prod-filter')||{}).value||'').split(/\s+/).filter(Boolean);const lojaF=(($('#rd-prod-loja')||{}).value)||'__all';let items=RDIST.items.map((it,i)=>({it,i}));if(terms.length)items=items.filter(o=>{const hay=norm((o.it.desc||'')+' '+(o.it.ean||'')+' '+(o.it.cod||''));return terms.every(t=>hay.includes(t));});if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
+  const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">A dividir</th>'+ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
+  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);const overTot=distq!==(+it.qtd||0);const cells=ds.map(d=>{const ed=RDIST.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="rdCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="rdDelItem('+i+')">×</button></td></tr>';}).join('');
+  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+5)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
+  const s=$('#rd-prod-sub');if(s)s.innerHTML=RDIST.items.length+' itens'+(items.length!==RDIST.items.length?' · '+items.length+' no filtro':'')+' · base: <b>'+(RDIST.base==='total'?'estoque total':'estoque do CD')+'</b>';
+  $('#rd-k-itens').textContent=fmt(RDIST.items.length);$('#rd-k-rec').textContent=fmt(kRec);$('#rd-k-dist').textContent=fmt(kDist);}
+function rdCellEdit(cod,dest,val){const it=RDIST.items.find(x=>x.cod===cod);if(!it)return;if(!RDIST.over[cod]){const alloc=divEntCompute(RDIST);RDIST.over[cod]=Object.assign({},alloc[cod]||{});}const q=Math.max(0,parseInt(val)||0);if(q>0)RDIST.over[cod][dest]=q;else delete RDIST.over[cod][dest];RDIST.edited[cod+'|'+dest]=1;persistRdist();renderRdistProds();}
+function rdCargasRows(){const alloc=divEntCompute(RDIST);const ds=entDests();const out=[];ds.forEach(d=>{RDIST.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,qtd:q});});});return out;}
+function openRdCargasView(){if(!RDIST.items.length){toast('Sem produtos','warn');return;}let o=document.getElementById('de-cargas');if(!o){o=document.createElement('div');o.id='de-cargas';document.body.appendChild(o);}o.style.display='flex';renderRdCargasView();}
+function renderRdCargasView(){const o=document.getElementById('de-cargas');if(!o)return;const rows=rdCargasRows();const ds=entDests();const sel=document.getElementById('de-cargas-loja');const cur=sel?sel.value:'__all';const filt=(cur&&cur!=='__all')?rows.filter(r=>r.destId===cur):rows;const groups={};filt.forEach(r=>{(groups[r.destId]=groups[r.destId]||[]).push(r);});const order=ds.map(d=>d.id).filter(id=>groups[id]);
+  const body=order.map(id=>{const list=groups[id];const nm=id==='cd'?'CD (fica no estoque)':(ds.find(d=>d.id===id)||{}).name;const tot=list.reduce((a,r)=>a+r.qtd,0);return '<div style="margin:6px 0 2px;padding:8px 16px;background:#f0f6ff;font-weight:700;font-size:13px;border-top:1px solid var(--line2)">'+distEscAttr(nm)+' · <span style="color:var(--muted);font-weight:600">'+list.length+' itens · '+fmt(tot)+' un</span></div><table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Enviar</th></tr></thead><tbody>'+list.map(r=>'<tr><td class="mono">'+r.cod+'</td><td class="mono" style="font-size:11px;color:var(--muted)">'+(r.ean||'—')+'</td><td>'+(r.desc||'')+'</td><td class="r num"><b>'+r.qtd+'</b></td></tr>').join('')+'</tbody></table>';}).join('');
+  const opts='<option value="__all">Todas as lojas</option>'+ds.map(d=>'<option value="'+d.id+'"'+(cur===d.id?' selected':'')+'>'+distEscAttr(deShortName(d))+'</option>').join('');
+  o.innerHTML='<div class="dp-box" style="width:920px"><div class="dp-hd"><div><div class="dp-tt">Cargas a montar</div><div class="dp-sub">distribuição do estoque · '+(RDIST.base==='total'?'estoque total':'estoque do CD')+'</div></div><div style="display:flex;gap:8px;align-items:center"><select class="sel" id="de-cargas-loja" onchange="renderRdCargasView()">'+opts+'</select><button class="btn sm gho" onclick="document.getElementById(\'de-cargas\').style.display=\'none\'">✕</button></div></div><div class="dp-body">'+(body||'<div class="empty">Nada a enviar.</div>')+'</div><div class="dp-ft"><button class="btn pri" onclick="rdGerarCargas()">Exportar Excel</button></div></div>';}
+function rdGerarCargas(){if(!RDIST.items.length){toast('Sem produtos','warn');return;}const rows=rdCargasRows();if(!rows.length){toast('Nada para gerar','warn');return;}const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Enviar']];rows.forEach(r=>aoa.push([r.dest,r.cod,r.ean,r.desc,r.qtd]));const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:8}];XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_estoque_'+stamp()+'.xlsx');toast('Cargas geradas','ok');}
+
 let APP_STARTED=false;
 async function startApp(){
   if(APP_STARTED)return; APP_STARTED=true;
@@ -1950,7 +2055,7 @@ async function startApp(){
   $('#cat-status').textContent='Cadastro: '+fmt(CATALOG.length)+' itens';
   const sess=await store.get(K_SESS);if(sess){counts=sess.counts||{};order=sess.order||[];reads=sess.reads||[];blocked=sess.blocked||0;if(sess.invId&&$('#inv-id'))$('#inv-id').value=sess.invId;}
   const hist=await store.get(K_HIST);if(hist&&Array.isArray(hist))SAVED=hist;
-  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();
+  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();await loadRdist();
   renderStats();renderCount();renderCatalog();renderHistory();renderVagasRegistry();updateVagaDatalist();
   const invId=$('#inv-id');if(invId)invId.addEventListener('input',persistSession);
   const vc=$('#v-code');if(vc){vc.addEventListener('input',()=>{const p=lookup(vc.value.trim());if(p){const v=vagaOf(p.cod);$('#v-found').innerHTML='→ <b>'+p.desc+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo atual <b>'+fmt(saldoOf(p.cod))+'</b>'+(v?' · já na vaga <b>'+v+'</b>':' · sem vaga');}else $('#v-found').textContent=vc.value.trim()?'produto não encontrado na base':'';});
