@@ -194,15 +194,15 @@
   #dist-loading .dl-box{background:#fff;border-radius:14px;padding:22px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);min-width:250px;max-width:80vw;text-align:center;font-size:13px;color:var(--ink)}
   #dist-loading .dl-spin{width:34px;height:34px;border:3px solid #dbe6f5;border-top-color:var(--brand);border-radius:50%;animation:dlspin .8s linear infinite}
   @keyframes dlspin{to{transform:rotate(360deg)}}
-  #dist-preview,#dist-hist,#dist-histview,#de-cargas{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
-  #dist-preview .dp-box,#dist-hist .dp-box,#dist-histview .dp-box,#de-cargas .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
-  #dist-preview .dp-hd,#dist-hist .dp-hd,#dist-histview .dp-hd,#de-cargas .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
-  #dist-preview .dp-tt,#dist-hist .dp-tt,#dist-histview .dp-tt,#de-cargas .dp-tt{font-weight:800;font-size:15px}
-  #dist-preview .dp-sub,#dist-hist .dp-sub,#dist-histview .dp-sub,#de-cargas .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
-  #dist-preview .dp-hd .btn,#dist-hist .dp-hd .btn,#dist-histview .dp-hd .btn,#de-cargas .dp-hd .btn{margin-left:auto}
-  #dist-preview .dp-body,#dist-hist .dp-body,#dist-histview .dp-body,#de-cargas .dp-body{overflow:auto;flex:1}
-  #dist-preview .dp-add,#dist-hist .dp-add,#dist-histview .dp-add,#de-cargas .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  #dist-preview .dp-ft,#dist-hist .dp-ft,#dist-histview .dp-ft,#de-cargas .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
+  #dist-preview,#dist-hist,#dist-histview,#de-cargas,#rd-hist{position:fixed;inset:0;background:rgba(8,18,40,.5);display:none;align-items:center;justify-content:center;z-index:6000;padding:20px}
+  #dist-preview .dp-box,#dist-hist .dp-box,#dist-histview .dp-box,#de-cargas .dp-box,#rd-hist .dp-box{background:#fff;border-radius:16px;width:780px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 70px rgba(0,0,0,.4);overflow:hidden}
+  #dist-preview .dp-hd,#dist-hist .dp-hd,#dist-histview .dp-hd,#de-cargas .dp-hd,#rd-hist .dp-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
+  #dist-preview .dp-tt,#dist-hist .dp-tt,#dist-histview .dp-tt,#de-cargas .dp-tt,#rd-hist .dp-tt{font-weight:800;font-size:15px}
+  #dist-preview .dp-sub,#dist-hist .dp-sub,#dist-histview .dp-sub,#de-cargas .dp-sub,#rd-hist .dp-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  #dist-preview .dp-hd .btn,#dist-hist .dp-hd .btn,#dist-histview .dp-hd .btn,#de-cargas .dp-hd .btn,#rd-hist .dp-hd .btn{margin-left:auto}
+  #dist-preview .dp-body,#dist-hist .dp-body,#dist-histview .dp-body,#de-cargas .dp-body,#rd-hist .dp-body{overflow:auto;flex:1}
+  #dist-preview .dp-add,#dist-hist .dp-add,#dist-histview .dp-add,#de-cargas .dp-add,#rd-hist .dp-add{padding:11px 18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #dist-preview .dp-ft,#dist-hist .dp-ft,#dist-histview .dp-ft,#de-cargas .dp-ft,#rd-hist .dp-ft{padding:14px 18px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px;background:#fafcff}
 </style>
 </head>
 <body>
@@ -563,7 +563,9 @@
     </div>
 
     <div class="card">
-      <div class="hd"><h3>Selecionar produtos</h3><span class="sub">por fornecedor ou itens específicos — só entram itens com estoque para dividir</span></div>
+      <div class="hd"><h3>Selecionar produtos</h3><span class="sub">por fornecedor ou itens específicos — eles já entram na tabela abaixo</span>
+        <div class="right"><span id="rd-mix-sub" style="font-size:12px;color:var(--muted)"></span></div>
+      </div>
       <div class="bd">
         <div class="form-row" style="align-items:flex-end">
           <div class="fld"><label>Por fornecedor</label><select class="sel" id="rd-forn" style="width:100%"></select></div>
@@ -571,8 +573,6 @@
           <div class="fld" style="flex:1"><label>Ou por item (código, cód. barras ou descrição)</label><input class="t" id="rd-item" placeholder="buscar e Enter…" oninput="rdItemSuggest()" onkeydown="if(event.key==='Enter')rdAddFirstSuggest()"></div>
         </div>
         <div id="rd-suggest" style="margin-top:4px"></div>
-        <div id="rd-mix" style="margin-top:10px"></div>
-        <div style="margin-top:12px;display:flex;gap:9px;align-items:center"><button class="btn pri" onclick="rdFazerDivisao()">Fazer a divisão</button><span id="rd-mix-sub" style="font-size:12px;color:var(--muted)"></span></div>
       </div>
     </div>
 
@@ -598,6 +598,8 @@
         <div class="right">
           <input class="t" id="rd-prod-filter" placeholder="filtrar produto…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderRdistProds()">
           <select class="sel" id="rd-prod-loja" onchange="renderRdistProds()"></select>
+          <button class="btn sm gho" onclick="openRdHist()">Salvos</button>
+          <button class="btn sm" onclick="rdSalvar()">Salvar divisão</button>
           <button class="btn sm" onclick="openRdCargasView()">Gerar cargas</button>
         </div>
       </div>
@@ -2009,15 +2011,14 @@ function rdBaseQty(cod){const s=(LOJAEST.byCod&&LOJAEST.byCod[cod])||{};if(RDIST
 function rdRefreshQty(){RDIST.items.forEach(it=>{it.qtd=rdBaseQty(it.cod);});}
 function fillRdForn(){const sel=$('#rd-forn');if(!sel)return;const cur=sel.value;const set={};CATALOG.forEach(p=>{if(p.forn)set[p.forn]=(set[p.forn]||0)+1;});const forns=Object.keys(set).sort((a,b)=>a.localeCompare(b));sel.innerHTML='<option value="">— escolha um fornecedor —</option>'+forns.map(f=>'<option value="'+f.replace(/"/g,'&quot;')+'">'+distEscAttr(f)+' ('+set[f]+')</option>').join('');if(cur)sel.value=cur;}
 function rdAddItem(p,silent){if(!p)return false;if(RDIST.items.some(x=>x.cod===p.cod))return false;const q=rdBaseQty(p.cod);if(q<=0){if(!silent)toast('Sem estoque para dividir','warn');return false;}RDIST.items.push({cod:p.cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',qtd:q});return true;}
-function rdAddForn(){const f=($('#rd-forn')||{}).value;if(!f){toast('Escolha um fornecedor','warn');return;}let add=0;CATALOG.forEach(p=>{if((p.forn||'')===f){if(rdAddItem(p,true))add++;}});persistRdist();renderRdMix();if(RDIST.done){rdRefreshQty();renderRdistProds();}toast(add+' item(ns) do fornecedor com estoque adicionados','ok');}
+function rdAddForn(){const f=($('#rd-forn')||{}).value;if(!f){toast('Escolha um fornecedor','warn');return;}if(!leN()){toast('Importe o estoque por loja primeiro','warn');return;}let add=0;CATALOG.forEach(p=>{if((p.forn||'')===f){if(rdAddItem(p,true))add++;}});if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);persistRdist();renderRdist();toast(add+' item(ns) do fornecedor com estoque adicionados','ok');}
 function rdItemSuggest(){const q=norm(($('#rd-item')||{}).value);const box=$('#rd-suggest');if(!box)return;if(q.length<2){box.innerHTML='';return;}const terms=q.split(/\s+/).filter(Boolean);const res=CATALOG.filter(p=>{const hay=norm((p.desc||'')+' '+((p.eans&&p.eans[0])||p.ean||'')+' '+p.cod+' '+(p.forn||''));return terms.every(t=>hay.includes(t));}).slice(0,8);box.innerHTML=res.length?res.map(p=>'<div class="rd-sg" onclick="rdAddByCod(\''+p.cod+'\')" style="padding:6px 10px;border:1px solid var(--line2);border-radius:8px;margin:3px 0;cursor:pointer;font-size:12.5px"><b>'+p.cod+'</b> · '+(p.desc||'')+' <span style="color:var(--soft)">'+(rdBaseQty(p.cod)||0)+' em estoque</span></div>').join(''):'<div style="color:var(--muted);font-size:12px;padding:4px">nada encontrado</div>';}
-function rdAddByCod(cod){const p=byCod[cod];if(rdAddItem(p)){persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}const i=$('#rd-item');if(i)i.value='';const s=$('#rd-suggest');if(s)s.innerHTML='';}
+function rdAddByCod(cod){const p=byCod[cod];if(rdAddItem(p)){if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);persistRdist();renderRdist();}const i=$('#rd-item');if(i){i.value='';i.focus();}const s=$('#rd-suggest');if(s)s.innerHTML='';}
 function rdAddFirstSuggest(){const first=document.querySelector('#rd-suggest .rd-sg');if(first)first.click();}
-function renderRdMix(){const el=$('#rd-mix');if(!el)return;if(!RDIST.items.length){el.innerHTML='<div style="color:var(--muted);font-size:12.5px">Nenhum produto selecionado ainda.</div>';const s=$('#rd-mix-sub');if(s)s.textContent='';return;}el.innerHTML='<div class="split">'+RDIST.items.map((it,i)=>'<span class="sb">'+it.cod+' · '+distEscAttr((it.desc||'').slice(0,26))+' <b>'+(it.qtd||0)+'</b><button onclick="rdDelItem('+i+')" style="margin-left:4px;border:none;background:none;cursor:pointer;color:var(--err)">×</button></span>').join('')+'</div>';const tot=RDIST.items.reduce((a,it)=>a+(it.qtd||0),0);const s=$('#rd-mix-sub');if(s)s.textContent=RDIST.items.length+' itens · '+fmt(tot)+' un a dividir';}
-function rdDelItem(i){const it=RDIST.items[i];if(!it)return;const cod=it.cod;RDIST.items.splice(i,1);delete RDIST.over[cod];Object.keys(RDIST.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete RDIST.edited[k];});persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}
-function rdSetBase(){RDIST.base=($('#rd-base')||{}).value||'cd';rdRefreshQty();RDIST.over={};RDIST.edited={};persistRdist();renderRdMix();if(RDIST.done)renderRdistProds();}
-function rdLimpar(){if(!RDIST.items.length){toast('Já está vazio','warn');return;}if(!confirm('Limpar a seleção e a divisão?'))return;RDIST.items=[];RDIST.over={};RDIST.edited={};RDIST.done=false;persistRdist();renderRdist();}
-function rdFazerDivisao(){if(!RDIST.items.length){toast('Selecione produtos primeiro','warn');return;}if(!leN()){toast('Importe o estoque por loja primeiro','warn');return;}rdRefreshQty();if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);RDIST.done=true;persistRdist();renderRdist();const c=document.getElementById('rd-prodcard');if(c)c.scrollIntoView({behavior:'smooth',block:'nearest'});}
+function renderRdMix(){const tot=RDIST.items.reduce((a,it)=>a+(it.qtd||0),0);const s=$('#rd-mix-sub');if(s)s.textContent=RDIST.items.length?(RDIST.items.length+' itens · '+fmt(tot)+' un a dividir'):'';}
+function rdDelItem(i){const it=RDIST.items[i];if(!it)return;const cod=it.cod;RDIST.items.splice(i,1);delete RDIST.over[cod];Object.keys(RDIST.edited).forEach(k=>{if(k.indexOf(cod+'|')===0)delete RDIST.edited[k];});persistRdist();renderRdist();}
+function rdSetBase(){RDIST.base=($('#rd-base')||{}).value||'cd';rdRefreshQty();RDIST.over={};RDIST.edited={};persistRdist();renderRdist();}
+function rdLimpar(){if(!RDIST.items.length){toast('Já está vazio','warn');return;}if(!confirm('Limpar a seleção e a divisão?'))return;RDIST.items=[];RDIST.over={};RDIST.edited={};persistRdist();renderRdist();}
 function rdSetPct(id,v){RDIST.pct[id]=Math.max(0,parseFloat(v)||0);RDIST.mode='manual';persistRdist();rdUpdateSum();rdUpdateModeBtns();renderRdistProds();}
 function rdUpdateSum(){const t=entDests().reduce((a,d)=>a+(+RDIST.pct[d.id]||0),0);const el=$('#rd-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
 function rdUpdateModeBtns(){['rd-btn-igual','rd-btn-venda'].forEach(id=>{const b=$('#'+id);if(b)b.classList.remove('pri');});const act={igual:'rd-btn-igual',venda:'rd-btn-venda'}[RDIST.mode];if(act){const b=$('#'+act);if(b)b.classList.add('pri');}}
@@ -2025,7 +2026,7 @@ function rdDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.
 function rdDividirVenda(){if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}const cd=+RDIST.pct['cd']||0;const rest=Math.max(0,100-cd);const lojas=FIXED_STORES.map(a=>a[0]);const total=lojas.reduce((a,id)=>a+(VENDAS[id]||0),0);if(total<=0){toast('Vendas zeradas','warn');return;}const raw=lojas.map(id=>{const exact=(VENDAS[id]||0)/total*rest;return {id,exact,base:Math.floor(exact)};});let rem=rest-raw.reduce((a,o)=>a+o.base,0);raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});raw.forEach(o=>RDIST.pct[o.id]=o.base);RDIST.pct['cd']=cd;RDIST.over={};RDIST.edited={};RDIST.mode='venda';persistRdist();renderRdist();toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');}
 function renderRdistDests(){const el=$('#rd-dests');if(!el)return;const rows=entDests().map(d=>{const isCd=d.id==='cd';return '<tr'+(isCd?' style="background:#f0f6ff"':'')+'><td>'+(isCd?'<b>'+distEscAttr(d.name)+'</b>':distEscAttr(d.name))+'</td><td class="r"><input class="qty-in" style="width:70px" type="number" min="0" value="'+(+RDIST.pct[d.id]||0)+'" oninput="rdSetPct(\''+d.id+'\',this.value)"></td><td>'+(isCd?'<span class="badge b-info">CD recebe</span>':'')+'</td></tr>';}).join('');el.innerHTML='<table><thead><tr><th>Destino</th><th class="r" style="width:90px">%</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';rdUpdateSum();}
 function fillRdLojaSel(){const sel=$('#rd-prod-loja');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas</option>'+entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(deShortName(d))+'</option>').join('');if(cur)sel.value=cur;}
-function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.done&&RDIST.items.length;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
+function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.items.length>0;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
 function renderRdistProds(){const body=$('#rd-prod-body');if(!body)return;const alloc=divEntCompute(RDIST);const ds=entDests();let kRec=0,kDist=0;RDIST.items.forEach(it=>{const a=alloc[it.cod]||{};kRec+=(+it.qtd||0);kDist+=Object.values(a).reduce((x,y)=>x+y,0);});
   const terms=norm(($('#rd-prod-filter')||{}).value||'').split(/\s+/).filter(Boolean);const lojaF=(($('#rd-prod-loja')||{}).value)||'__all';let items=RDIST.items.map((it,i)=>({it,i}));if(terms.length)items=items.filter(o=>{const hay=norm((o.it.desc||'')+' '+(o.it.ean||'')+' '+(o.it.cod||''));return terms.every(t=>hay.includes(t));});if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
   const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">A dividir</th>'+ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
@@ -2041,6 +2042,39 @@ function renderRdCargasView(){const o=document.getElementById('de-cargas');if(!o
   const opts='<option value="__all">Todas as lojas</option>'+ds.map(d=>'<option value="'+d.id+'"'+(cur===d.id?' selected':'')+'>'+distEscAttr(deShortName(d))+'</option>').join('');
   o.innerHTML='<div class="dp-box" style="width:920px"><div class="dp-hd"><div><div class="dp-tt">Cargas a montar</div><div class="dp-sub">distribuição do estoque · '+(RDIST.base==='total'?'estoque total':'estoque do CD')+'</div></div><div style="display:flex;gap:8px;align-items:center"><select class="sel" id="de-cargas-loja" onchange="renderRdCargasView()">'+opts+'</select><button class="btn sm gho" onclick="document.getElementById(\'de-cargas\').style.display=\'none\'">✕</button></div></div><div class="dp-body">'+(body||'<div class="empty">Nada a enviar.</div>')+'</div><div class="dp-ft"><button class="btn pri" onclick="rdGerarCargas()">Exportar Excel</button></div></div>';}
 function rdGerarCargas(){if(!RDIST.items.length){toast('Sem produtos','warn');return;}const rows=rdCargasRows();if(!rows.length){toast('Nada para gerar','warn');return;}const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Enviar']];rows.forEach(r=>aoa.push([r.dest,r.cod,r.ean,r.desc,r.qtd]));const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:8}];XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_estoque_'+stamp()+'.xlsx');toast('Cargas geradas','ok');}
+const K_RDHIST='inv_rdhist_idx';
+async function rdSalvar(){
+  if(!RDIST.items.length){toast('Nada para salvar','warn');return;}
+  rdRefreshQty();
+  const alloc=divEntCompute(RDIST);
+  const rows=RDIST.items.map(it=>({cod:it.cod,ean:it.ean,desc:it.desc,qtd:it.qtd,a:Object.assign({},alloc[it.cod]||{})}));
+  const id='r'+Date.now();const data={ts:Date.now(),base:RDIST.base,pct:Object.assign({},RDIST.pct),rows:rows};
+  const dist=rows.reduce((s,r)=>s+Object.values(r.a).reduce((x,y)=>x+y,0),0);
+  try{
+    await store.set('inv_rdhist_'+id,data);
+    const idx=(await store.get(K_RDHIST))||[];idx.unshift({id:id,ts:data.ts,base:data.base,itens:rows.length,dist:dist});if(idx.length>60)idx.length=60;await store.set(K_RDHIST,idx);
+    toast('Divisão salva no histórico','ok');
+  }catch(e){toast('Não consegui salvar: '+e.message,'err');}
+}
+async function openRdHist(){
+  let o=document.getElementById('rd-hist');if(!o){o=document.createElement('div');o.id='rd-hist';document.body.appendChild(o);}
+  o.style.display='flex';o.innerHTML='<div class="dp-box"><div class="dp-hd"><div class="dp-tt">Divisões salvas</div><button class="btn sm gho" onclick="document.getElementById(\'rd-hist\').style.display=\'none\'">✕</button></div><div class="dp-body" id="rd-hist-body" style="padding:6px 0"><div class="empty">Carregando…</div></div></div>';
+  const idx=(await store.get(K_RDHIST))||[];const body=document.getElementById('rd-hist-body');
+  if(!idx.length){body.innerHTML='<div class="empty">Nenhuma divisão salva ainda. Use “Salvar divisão”.</div>';return;}
+  body.innerHTML='<table><thead><tr><th>Data</th><th>Base</th><th class="r">Itens</th><th class="r">Distribuído</th><th></th></tr></thead><tbody>'+
+    idx.map(m=>'<tr><td><b>'+distHistFmtDate(m.ts)+'</b></td><td>'+(m.base==='total'?'estoque total':'estoque do CD')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.dist)+'</td>'+
+      '<td class="r" style="white-space:nowrap"><button class="btn sm" onclick="rdHistReopen(\''+m.id+'\')">reabrir</button> <button class="btn sm gho" onclick="rdHistExport(\''+m.id+'\')">exportar</button> <button class="btn sm gho dgr" onclick="rdHistDel(\''+m.id+'\')">excluir</button></td></tr>').join('')+'</tbody></table>';
+}
+async function rdHistReopen(id){
+  const data=await store.get('inv_rdhist_'+id);if(!data){toast('Não achei os dados','err');return;}
+  if(!confirm('Reabrir esta divisão? Isto substitui o que está na tela agora.'))return;
+  RDIST.base=data.base||'cd';RDIST.pct=Object.assign({},data.pct||{});RDIST.over={};RDIST.edited={};
+  RDIST.items=(data.rows||[]).map(r=>({cod:r.cod,ean:r.ean,desc:r.desc,qtd:r.qtd}));
+  (data.rows||[]).forEach(r=>{RDIST.over[r.cod]=Object.assign({},r.a||{});});
+  persistRdist();const o=document.getElementById('rd-hist');if(o)o.style.display='none';renderRdist();toast('Divisão reaberta','ok');
+}
+async function rdHistDel(id){if(!confirm('Excluir esta divisão salva?'))return;try{const idx=((await store.get(K_RDHIST))||[]).filter(m=>m.id!==id);await store.set(K_RDHIST,idx);await store.del('inv_rdhist_'+id);}catch(e){}openRdHist();toast('Removida','ok');}
+async function rdHistExport(id){const data=await store.get('inv_rdhist_'+id);if(!data){toast('Não achei os dados','err');return;}const ds=entDests();const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Enviar']];ds.forEach(d=>{(data.rows||[]).forEach(r=>{const q=(r.a||{})[d.id]||0;if(q>0)aoa.push([d.id==='cd'?'CD':d.name,r.cod,r.ean,r.desc,q]);});});if(aoa.length<2){toast('Nada a exportar','warn');return;}const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:8}];XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_estoque_'+stamp()+'.xlsx');toast('Exportada','ok');}
 
 let APP_STARTED=false;
 async function startApp(){
