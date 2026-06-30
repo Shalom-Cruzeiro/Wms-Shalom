@@ -556,6 +556,8 @@
         <div class="right">
           <input class="t" id="de-prod-filter" placeholder="filtrar produto…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderDivEntProds()">
           <select class="sel" id="de-prod-loja" onchange="renderDivEntProds()"></select>
+          <button class="btn sm gho" onclick="openEnHist()">Salvos</button>
+          <button class="btn sm" onclick="enSalvar()">Salvar divisão</button>
           <button class="btn sm" onclick="openCargasView()">Gerar cargas</button>
         </div>
       </div>
@@ -896,7 +898,11 @@ function onCatFile(ev){
       }
       // Registro de Inventário (agrupado por fornecedor)
       const aoa0=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});
-      const isReg=aoa0.slice(0,40).some(r=>norm(r[0]||'')==='codigo'&&r.some(c=>norm(c).includes('barras')))||aoa0.slice(0,6).some(r=>r.some(c=>norm(c).includes('registro de inventario')));
+      const head40=aoa0.slice(0,45);
+      const hasCodBarHeader=head40.some(r=>r.some(c=>{const x=norm(c);return x==='codigo'||x==='codigo do produto';})&&r.some(c=>norm(c).includes('barras')));
+      const hasRegTitle=aoa0.slice(0,8).some(r=>r.some(c=>norm(c).includes('registro de inventario')||norm(c).includes('exportacaoregistroinventario')));
+      const hasFornRows=aoa0.slice(0,200).some(r=>{const a=String(r[0]==null?'':r[0]).trim();const b=String(r[1]==null?'':r[1]).trim();return !a&&/^\d+\s*-\s*\S/.test(b);});
+      const isReg=hasCodBarHeader||hasRegTitle||(hasFornRows&&head40.some(r=>r.some(c=>norm(c).includes('barras'))));
       if(isReg){
         const processed=processRegistroInventario(aoa0);
         if(processed&&processed.length){
@@ -912,6 +918,8 @@ function onCatFile(ev){
           $('#mapcard').scrollIntoView({behavior:'smooth',block:'nearest'});
           toast('Registro de Inventário: '+processed.length+' produtos. Confira a prévia e clique em "Importar para o cadastro".','ok');
           return;
+        }else{
+          alert('Detectei o formato Registro de Inventário, mas não consegui extrair os produtos. Me avise para ajustar.');
         }
       }
       // Formato simples: uma aba com colunas código/descrição/tamanho
@@ -2001,6 +2009,38 @@ function renderDivEntProds(){
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
 function deCargasRows(){const alloc=divEntCompute();const ds=entDests();const out=[];ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,qtd:q});});});return out;}
+const K_ENTHIST='inv_enthist_idx';
+async function enSalvar(){
+  if(!ENT.items.length){toast('Nada para salvar','warn');return;}
+  const alloc=divEntCompute();
+  const rows=ENT.items.map(it=>({cod:it.cod,ean:it.ean,desc:it.desc,qtd:it.qtd,a:Object.assign({},alloc[it.cod]||{})}));
+  const id='e'+Date.now();const data={ts:Date.now(),docs:ENT.docs.slice(),pct:Object.assign({},ENT.pct),rows:rows};
+  const dist=rows.reduce((s,r)=>s+Object.values(r.a).reduce((x,y)=>x+y,0),0);
+  try{
+    await store.set('inv_enthist_'+id,data);
+    const idx=(await store.get(K_ENTHIST))||[];idx.unshift({id:id,ts:data.ts,docs:data.docs,itens:rows.length,dist:dist});if(idx.length>60)idx.length=60;await store.set(K_ENTHIST,idx);
+    toast('Divisão da entrada salva no histórico','ok');
+  }catch(e){toast('Não consegui salvar: '+e.message,'err');}
+}
+async function openEnHist(){
+  let o=document.getElementById('rd-hist');if(!o){o=document.createElement('div');o.id='rd-hist';document.body.appendChild(o);}
+  o.style.display='flex';o.innerHTML='<div class="dp-box"><div class="dp-hd"><div class="dp-tt">Divisões de entrada salvas</div><button class="btn sm gho" onclick="document.getElementById(\'rd-hist\').style.display=\'none\'">✕</button></div><div class="dp-body" id="rd-hist-body" style="padding:6px 0"><div class="empty">Carregando…</div></div></div>';
+  const idx=(await store.get(K_ENTHIST))||[];const body=document.getElementById('rd-hist-body');
+  if(!idx.length){body.innerHTML='<div class="empty">Nenhuma divisão de entrada salva ainda. Use “Salvar divisão”.</div>';return;}
+  body.innerHTML='<table><thead><tr><th>Data</th><th>NF</th><th class="r">Itens</th><th class="r">Distribuído</th><th></th></tr></thead><tbody>'+
+    idx.map(m=>'<tr><td><b>'+distHistFmtDate(m.ts)+'</b></td><td>'+((m.docs||[]).join(', ')||'—')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.dist)+'</td>'+
+      '<td class="r" style="white-space:nowrap"><button class="btn sm" onclick="enHistReopen(\''+m.id+'\')">reabrir</button> <button class="btn sm gho" onclick="enHistExport(\''+m.id+'\')">exportar</button> <button class="btn sm gho dgr" onclick="enHistDel(\''+m.id+'\')">excluir</button></td></tr>').join('')+'</tbody></table>';
+}
+async function enHistReopen(id){
+  const data=await store.get('inv_enthist_'+id);if(!data){toast('Não achei os dados','err');return;}
+  if(!confirm('Reabrir esta divisão? Isto substitui o que está na tela agora.'))return;
+  ENT.docs=(data.docs||[]).slice();ENT.pct=Object.assign({},data.pct||{});ENT.over={};ENT.edited={};
+  ENT.items=(data.rows||[]).map(r=>({cod:r.cod,ean:r.ean,desc:r.desc,qtd:r.qtd}));
+  (data.rows||[]).forEach(r=>{ENT.over[r.cod]=Object.assign({},r.a||{});});
+  persistEnt();const o=document.getElementById('rd-hist');if(o)o.style.display='none';renderDivEnt();toast('Divisão reaberta','ok');
+}
+async function enHistDel(id){if(!confirm('Excluir esta divisão salva?'))return;try{const idx=((await store.get(K_ENTHIST))||[]).filter(m=>m.id!==id);await store.set(K_ENTHIST,idx);await store.del('inv_enthist_'+id);}catch(e){}openEnHist();toast('Removida','ok');}
+async function enHistExport(id){const data=await store.get('inv_enthist_'+id);if(!data){toast('Não achei os dados','err');return;}const ds=entDests();const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Enviar']];ds.forEach(d=>{(data.rows||[]).forEach(r=>{const q=(r.a||{})[d.id]||0;if(q>0)aoa.push([d.id==='cd'?'CD':d.name,r.cod,r.ean,r.desc,q]);});});if(aoa.length<2){toast('Nada a exportar','warn');return;}const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:8}];XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_entrada_'+stamp()+'.xlsx');toast('Exportada','ok');}
 function openCargasView(){
   if(!ENT.items.length){toast('Importe um XML primeiro','warn');return;}
   let o=document.getElementById('de-cargas');if(!o){o=document.createElement('div');o.id='de-cargas';o.className='';document.body.appendChild(o);}
