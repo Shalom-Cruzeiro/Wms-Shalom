@@ -186,7 +186,7 @@
   .de-stk{font-size:9.5px;color:var(--soft);line-height:1;margin-bottom:2px}
   .de-cin{width:44px;text-align:center;font-family:var(--mono);font-size:12px;padding:4px 2px;border:1px solid var(--line);border-radius:6px;outline:none}
   .de-cell.de-edited .de-cin{background:#fff3d6;border-color:#e6b34d;font-weight:700}
-  #view-diventrada .de-th{font-size:10.5px;text-align:center;border-left:1px solid var(--line2);white-space:nowrap;padding:6px 4px}
+  .de-th{font-size:10.5px;text-align:center;border-left:1px solid var(--line2);white-space:nowrap;padding:6px 4px}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
   select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
@@ -482,7 +482,9 @@
     <div id="dist-e1">
       <div class="card">
         <div class="hd"><h3>Cargas a montar</h3>
-          <div class="right"><span style="font-size:12px;color:var(--muted);font-weight:600">Ver:</span>
+          <div class="right">
+            <input class="t" id="dist-prod-filter" placeholder="filtrar produto…" style="padding:7px 10px;font-size:13px;width:140px" oninput="renderDistE1()">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">Loja:</span>
             <select class="sel" id="dist-loja-sel" onchange="renderDistE1()"></select>
             <button class="btn sm" id="dist-onlystock" onclick="distToggleStock()">Mostrar todos</button>
             <button class="btn sm" onclick="exportCarga()">Exportar carga</button></div>
@@ -1520,7 +1522,7 @@ function distSetPct(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.pct=Mat
 function distLimparTudo(){
   if(!distCodes().length){toast('Não há pedidos para limpar','warn');return;}
   if(!confirm('Limpar todos os pedidos anexados das lojas? (os percentuais são mantidos)'))return;
-  DIST.stores.forEach(s=>{DIST.demand[s.id]={};});
+  DIST.stores.forEach(s=>{DIST.demand[s.id]={};});DIST.over={};DIST.edited={};
   persistDist();distOnlyStock=false;renderDistLojas();renderDist();
   toast('Pedidos limpos','ok');
 }
@@ -1678,26 +1680,27 @@ function renderDistLojas(){
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
 function distEan(cod){const p=byCod[cod]||{};return p.ean||(p.eans&&p.eans[0])||'';}
 function distEanCell(cod){const e=distEan(cod);return e?'<span class="mono" style="font-size:11.5px">'+e+'</span>':'<span style="color:var(--soft)">—</span>';}
+function distEffRecebe(res,cod,sid){const o=DIST.over&&DIST.over[cod];if(o&&o[sid]!=null)return o[sid];return res[cod].recebe[sid]||0;}
+function distCellEdit(cod,sid,val){if(!DIST.over)DIST.over={};if(!DIST.edited)DIST.edited={};if(!DIST.over[cod])DIST.over[cod]={};DIST.over[cod][sid]=Math.max(0,parseInt(val)||0);DIST.edited[cod+'|'+sid]=1;persistDist();renderDistE1();}
 function renderDistE1(){
   const res=distCompute();const sel=($('#dist-loja-sel')||{}).value||'__all';const body=$('#dist-e1-body');if(!body)return;
-  let codes=distCodes();
+  if(!DIST.over)DIST.over={};if(!DIST.edited)DIST.edited={};
   const btn=$('#dist-onlystock');if(btn){btn.textContent=distOnlyStock?'Mostrando só o que recebe':'Só o que vai receber';btn.classList.toggle('pri',distOnlyStock);}
-  if(distOnlyStock){
-    if(sel==='__all')codes=codes.filter(cod=>res[cod].dist>0);
-    else codes=codes.filter(cod=>(res[cod].recebe[sel]||0)>0);
-  }
   if(!distCodes().length){body.innerHTML='<div class="empty">Anexe os pedidos das lojas para montar as cargas.</div>';return;}
-  if(distOnlyStock&&!codes.length){body.innerHTML='<div class="empty">Nada a receber'+(sel==='__all'?'':' nesta loja')+' com os percentuais atuais.</div>';return;}
-  if(sel==='__all'){
-    body.innerHTML='<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th><th class="r">Distribuído</th><th class="r">Sobra CD</th><th>Cada loja recebe</th></tr></thead><tbody>'+
-      codes.map(cod=>{const r=res[cod];const chips=DIST.stores.filter(s=>r.recebe[s.id]>0).map(s=>'<span class="sb">'+distEscAttr(s.name)+' <b>'+r.recebe[s.id]+'</b></span>').join('');
-        return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td><td class="r"><span class="badge b-ok">'+r.dist+'</span></td><td class="r num" style="color:var(--muted)">'+r.sobra+'</td><td><div class="split">'+(chips||'<span style="color:var(--soft)">—</span>')+'</div></td></tr>';}).join('')+'</tbody></table>';
-  }else{
-    const s=DIST.stores.find(x=>x.id===sel);if(!s){body.innerHTML='';return;}let ped=0,rec=0;
-    const rows=codes.map(cod=>{const r=res[cod];const pedido=(DIST.demand[sel]||{})[cod]||0;const got=r.recebe[sel]||0;if(pedido===0&&got===0)return'';ped+=pedido;rec+=got;
-      return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+pedido+'</td><td class="r num" style="color:var(--muted)">'+(+s.pct||0)+'%</td><td class="r"><span class="badge '+(got===pedido?'b-ok':'b-warn')+'">'+got+'</span></td></tr>';}).join('');
-    body.innerHTML='<div class="bd" style="border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--muted)">Carga de <b style="color:var(--ink)">'+distEscAttr(s.name)+'</b> — % desta loja: <b style="color:var(--ink)">'+(+s.pct||0)+'%</b> · pediu '+ped+' · vai receber '+rec+(distOnlyStock?' · <span style="color:var(--brand)">só o que vai receber</span>':'')+'</div><table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Pediu</th><th class="r">% loja</th><th class="r">Recebe</th></tr></thead><tbody>'+(rows||'<tr><td colspan=8 style="text-align:center;color:var(--muted);padding:22px">'+(distOnlyStock?'Esta loja não vai receber nada com os percentuais atuais.':'Esta loja não tem itens com pedido.')+'</td></tr>')+'</tbody></table>';
-  }
+  const cols=(sel==='__all')?DIST.stores:DIST.stores.filter(s=>s.id===sel);
+  let codes=distCodes();
+  const terms=norm(($('#dist-prod-filter')||{}).value||'').split(/\s+/).filter(Boolean);
+  if(terms.length)codes=codes.filter(cod=>{const r=res[cod];const hay=norm((r.desc||'')+' '+distEan(cod)+' '+cod+' '+(r.forn||''));return terms.every(t=>hay.includes(t));});
+  if(distOnlyStock)codes=codes.filter(cod=>cols.some(s=>distEffRecebe(res,cod,s.id)>0));
+  else if(sel!=='__all')codes=codes.filter(cod=>((DIST.demand[sel]||{})[cod]||0)>0||distEffRecebe(res,cod,sel)>0);
+  if(!codes.length){body.innerHTML='<div class="empty">Nada para mostrar com os filtros atuais.</div>';return;}
+  const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th>'+
+    cols.map(s=>'<th class="de-th" title="'+distEscAttr(s.name)+'">'+distEscAttr(deShortName({id:s.id,name:s.name}))+'<div style="font-weight:600;color:var(--soft)">'+(+s.pct||0)+'%</div></th>').join('')+'</tr></thead><tbody>';
+  const rows=codes.map(cod=>{const r=res[cod];
+    const cells=cols.map(s=>{const ped=(DIST.demand[s.id]||{})[cod]||0;const got=distEffRecebe(res,cod,s.id);const ed=DIST.edited[cod+'|'+s.id]?' de-edited':'';
+      return '<td class="de-cell'+ed+'"><div class="de-stk" title="pediu">'+ped+'</div><input class="de-cin" type="number" min="0" value="'+got+'" onchange="distCellEdit(\''+cod+'\',\''+s.id+'\',this.value)"></td>';}).join('');
+    return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'</tr>';}).join('');
+  body.innerHTML=head+rows+'</tbody></table><div class="bd" style="border-top:1px solid var(--line2);font-size:11.5px;color:var(--soft)">O nº pequeno em cinza é o que a loja pediu. Edite a quantidade a enviar direto na célula (fica amarela).</div>';
 }
 function renderDistE2(){
   const res=distCompute();const body=$('#dist-e2-body');if(!body)return;
@@ -1713,7 +1716,7 @@ function exportCarga(){
   const res=distCompute();const codes=distCodes();
   if(!codes.length){toast('Nada para exportar','warn');return;}
   const aoa=[['Loja','Cod. Produto','Cod. Barras','Descricao','Fornecedor','Vaga','Pediu','Recebe']];
-  DIST.stores.forEach(s=>{codes.forEach(cod=>{const r=res[cod];const got=r.recebe[s.id]||0;const pedido=(DIST.demand[s.id]||{})[cod]||0;if(got>0)aoa.push([s.name,cod,distEan(cod),r.desc,r.forn,r.vaga,pedido,got]);});});
+  DIST.stores.forEach(s=>{codes.forEach(cod=>{const r=res[cod];const got=distEffRecebe(res,cod,s.id);const pedido=(DIST.demand[s.id]||{})[cod]||0;if(got>0)aoa.push([s.name,cod,distEan(cod),r.desc,r.forn,r.vaga,pedido,got]);});});
   const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:14},{wch:15},{wch:42},{wch:22},{wch:12},{wch:8},{wch:8}];
   XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_lojas_'+stamp()+'.xlsx');toast('Carga exportada','ok');
 }
@@ -1730,7 +1733,7 @@ function exportCompra(){
 const K_DHIST='inv_disthist_idx';
 function distSnapshotData(){
   const res=distCompute();const codes=distCodes();
-  const rows=codes.map(cod=>{const r=res[cod];return {cod:cod,desc:r.desc,forn:r.forn,vaga:r.vaga,disp:r.disp,dist:r.dist,sobra:r.sobra,totalPed:r.totalPed,atendivel:r.atendivel,comprar:r.comprar,recebe:Object.assign({},r.recebe)};});
+  const rows=codes.map(cod=>{const r=res[cod];const recebe={};let dist=0;DIST.stores.forEach(s=>{const g=distEffRecebe(res,cod,s.id);if(g)recebe[s.id]=g;dist+=g;});return {cod:cod,desc:r.desc,forn:r.forn,vaga:r.vaga,disp:r.disp,dist:dist,sobra:r.disp-dist,totalPed:r.totalPed,atendivel:r.atendivel,comprar:r.comprar,recebe:recebe};});
   const demand={};DIST.stores.forEach(s=>{demand[s.id]=Object.assign({},DIST.demand[s.id]||{});});
   return {ts:Date.now(),cdPct:DIST.cdPct,stores:DIST.stores.map(s=>({id:s.id,name:s.name,pct:s.pct})),rows:rows,demand:demand};
 }
@@ -1745,7 +1748,7 @@ async function distFinalizar(){
     idx.unshift({id:id,ts:data.ts,itens:itens,distribuido:distribuido,comprar:comprar});
     if(idx.length>60)idx.length=60;
     await store.set(K_DHIST,idx);
-    DIST.stores.forEach(s=>{DIST.demand[s.id]={};});
+    DIST.stores.forEach(s=>{DIST.demand[s.id]={};});DIST.over={};DIST.edited={};
     await persistDist();
     distOnlyStock=false;distEtapa(1);
     toast('Distribuição salva no histórico. Tela limpa para a próxima.','ok');
