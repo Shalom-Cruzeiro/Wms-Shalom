@@ -359,10 +359,14 @@
   <!-- ============== ESTOQUE ============== -->
   <section id="view-estoque" style="display:none">
     <div class="card">
-      <div class="hd"><h3>Estoque atual do CD</h3><span class="sub" id="est-sub"></span>
+      <div class="hd"><h3>Estoque atual</h3><span class="sub" id="est-sub"></span>
         <div class="right">
-          <input class="t" id="est-filter" placeholder="Filtrar…" style="padding:7px 10px;font-size:13px;width:160px" oninput="renderEstoque()">
-          <button class="btn pri" onclick="document.getElementById('invfile').click()">Importar inventário (saldo)</button>
+          <span style="font-size:12px;color:var(--muted);font-weight:600">Ver:</span>
+          <select class="sel" id="est-loja" onchange="renderEstoque()"></select>
+          <input class="t" id="est-filter" placeholder="Filtrar…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderEstoque()">
+          <button class="btn pri" onclick="document.getElementById('est-loja-file2').click()">Importar estoque por loja</button>
+          <input type="file" id="est-loja-file2" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
+          <button class="btn sm gho" onclick="document.getElementById('invfile').click()">Importar inventário (saldo)</button>
           <input type="file" id="invfile" accept=".xlsx,.xls,.csv" onchange="onInvSaldoFile(event)">
           <button class="btn sm" onclick="exportEstoque()">Exportar Excel</button>
         </div>
@@ -713,25 +717,39 @@ function switchTab(t){
 /* ---------- ESTOQUE (saldo do sistema) ---------- */
 function saldoOf(cod){return SALDO[String(cod).trim()]||0;}
 function stockList(){return Object.keys(SALDO).map(cod=>{const p=byCod[cod]||{};return {cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:SALDO[cod]};});}
+function fillEstLojaSel(){const sel=$('#est-loja');if(!sel)return;if(sel.options.length)return;sel.innerHTML=entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(d.id==='cd'?'CD — Matriz':d.name)+'</option>').join('')+'<option value="total">Total (todas)</option>';}
+function estScopeList(scope){
+  const items=[];const haveLE=leN()>0;
+  if(haveLE){
+    Object.keys(LOJAEST.byCod).forEach(cod=>{const o=LOJAEST.byCod[cod];let q;if(scope==='total')q=entDests().reduce((a,d)=>a+(o[d.id]||0),0);else q=o[scope]||0;if(q>0){const p=byCod[cod]||{};items.push({cod:cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:q});}});
+    return items;
+  }
+  return stockList();
+}
 function renderEstoque(){
+  fillEstLojaSel();
+  const scope=($('#est-loja')||{}).value||'cd';
   const raw=$('#est-filter')?$('#est-filter').value:'';
   const terms=norm(raw).split(/\s+/).filter(Boolean);
-  let items=stockList();
+  let items=estScopeList(scope);
+  const haveLE=leN()>0;
   const totU=items.reduce((a,b)=>a+(b.saldo||0),0), totS=items.length;
   if(terms.length)items=items.filter(x=>{const forn=(byCod[x.cod]||{}).forn||'';const hay=norm((x.desc||'')+' '+(x.ean||'')+' '+(x.cod||'')+' '+(x.tam||'')+' '+forn);return terms.every(t=>hay.includes(t));});
   items.sort((a,b)=>(b.saldo||0)-(a.saldo||0));
-  $('#est-sub').textContent=fmt(totS)+' itens · '+fmt(totU)+' unidades'+(terms.length?' · '+items.length+' no filtro':'');
+  const scopeLbl=!haveLE?'inventário (saldo)':(scope==='total'?'total (todas as lojas + CD)':(scope==='cd'?'CD — Matriz':(entDests().find(d=>d.id===scope)||{}).name));
+  $('#est-sub').textContent=scopeLbl+' · '+fmt(totS)+' itens · '+fmt(totU)+' un'+(terms.length?' · '+items.length+' no filtro':'');
   const body=$('#est-body');
-  if(!totS){body.innerHTML='<div class="empty"><div class="big">≣</div>Sem saldo carregado</div>';return;}
+  if(!totS){body.innerHTML=haveLE?'<div class="empty"><div class="big">≣</div>Sem saldo neste destino</div>':'<div class="empty"><div class="big">≣</div>Importe o estoque por loja (ou o inventário)</div>';return;}
+  const showVaga=(scope==='cd'||!haveLE);
   const cap=600, rows=items.slice(0,cap);
-  body.innerHTML=`<table><thead><tr><th>Código de barras</th><th>Cód. produto</th><th>Descrição</th><th>Fornecedor</th><th>Tamanho</th><th>Vaga</th><th class="r">Saldo</th></tr></thead><tbody>${
+  body.innerHTML=`<table><thead><tr><th>Código de barras</th><th>Cód. produto</th><th>Descrição</th><th>Fornecedor</th><th>Tamanho</th>${showVaga?'<th>Vaga</th>':''}<th class="r">Saldo</th></tr></thead><tbody>${
     rows.map(x=>{const vaga=vagaOf(x.cod);const forn=(byCod[x.cod]||{}).forn||'';return `<tr>
       <td class="mono" style="color:var(--muted)">${x.ean||'—'}</td>
       <td class="mono" style="color:var(--muted)">${x.cod}</td>
       <td>${x.desc||'(sem descrição)'}</td>
       <td style="font-size:12px">${forn||'<span style="color:var(--soft)">—</span>'}</td>
       <td>${x.tam?`<span class="badge b-mut">${x.tam}</span>`:''}</td>
-      <td>${vaga?`<span class="badge b-ok mono">${vaga}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      ${showVaga?`<td>${vaga?`<span class="badge b-ok mono">${vaga}</span>`:'<span style="color:var(--muted)">—</span>'}</td>`:''}
       <td class="r mono"><b>${fmt(x.saldo)}</b></td>
     </tr>`;}).join('')
   }</tbody></table>${items.length>cap?`<div style="padding:10px 14px;color:var(--muted);font-size:12.5px">Mostrando ${cap} de ${items.length}. Use o filtro.</div>`:''}`;
@@ -1854,7 +1872,7 @@ function onLojaEstFile(ev){
   r.onload=async()=>{try{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});const parsed=parseLojaEstoque(aoa);
     if(!parsed||!Object.keys(parsed.byCod).length){toast('Não reconheci o arquivo de estoque por loja','warn');return;}
     LOJAEST=parsed;const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
-    renderDivEnt();toast(Object.keys(parsed.byCod).length+' produtos com estoque por loja importados','ok');
+    renderDivEnt();if(typeof renderEstoque==='function')renderEstoque();if(typeof renderRdist==='function')renderRdist();toast(Object.keys(parsed.byCod).length+' produtos com estoque por loja importados','ok');
   }catch(e){toast('Erro ao ler: '+e.message,'err');}};
   r.readAsArrayBuffer(f);ev.target.value='';
 }
