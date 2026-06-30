@@ -187,18 +187,17 @@
   .de-cin{width:44px;text-align:center;font-family:var(--mono);font-size:12px;padding:4px 2px;border:1px solid var(--line);border-radius:6px;outline:none}
   .de-cell.de-edited .de-cin{background:#fff3d6;border-color:#e6b34d;font-weight:700}
   .de-th{font-size:10.5px;text-align:center;border-left:1px solid var(--line2);white-space:nowrap;padding:6px 4px}
-  .pctwrap{display:flex;flex-wrap:wrap;gap:8px;padding:12px}
-  .pctchip{display:flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:9px;padding:6px 9px;background:#fff}
-  .pctchip.cd{background:#f0f6ff;border-color:#d8e6fb}
-  .pctchip .nm{font-size:12.5px;font-weight:600;white-space:nowrap}
-  .pctchip input{width:48px;text-align:center;font-family:var(--mono);font-size:12.5px;padding:4px;border:1px solid var(--line);border-radius:6px;outline:none}
-  .pctchip .pc{font-size:11px;color:var(--soft)}
-  .pctchip.dist{flex-direction:column;align-items:stretch;width:168px;gap:5px}
-  .pctchip.dist .pctrow{display:flex;align-items:center;gap:6px}
-  .pctchip.dist .pctrow .nm{flex:1}
-  .pctchip.dist .pctsub{display:flex;align-items:center;gap:6px;font-size:11px;flex-wrap:wrap}
-  .lk{border:none;background:none;color:var(--brand);cursor:pointer;font-size:11px;padding:0;text-decoration:underline}
+  .pctlist{display:block}
+  .pctcd{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#eef5ff}
+  .pctrow{display:flex;align-items:center;gap:10px;padding:6px 14px;border-top:1px solid var(--line2)}
+  .pctrow .nm,.pctcd .nm{flex:1;font-size:12.5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pctrow input,.pctcd input{width:46px;text-align:center;font-family:var(--mono);font-size:12px;padding:5px;border:1px solid var(--line);border-radius:7px;outline:none;color:var(--ink);background:#fff}
+  .pctrow .pc,.pctcd .pc{font-size:11px;color:var(--soft)}
+  .pctrow .ped{width:128px;text-align:right;flex-shrink:0}
+  .pctrow .act{width:140px;text-align:right;flex-shrink:0}
+  .lk{border:none;background:none;color:var(--brand);cursor:pointer;font-size:11px;padding:0;white-space:nowrap;font-weight:600}
   .lk.dgr{color:var(--err)}
+  @media(max-width:720px){.pctrow .ped{width:auto}.pctrow .act{width:auto}}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
   select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
@@ -1677,12 +1676,12 @@ function distVagaPill(v){return v?'<span class="pill-vaga">'+v+'</span>':'<span 
 
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
-  let chips='<div class="pctchip cd dist"><div class="pctrow"><span class="nm">CD</span><input type="number" min="0" value="'+(+DIST.cdPct||0)+'" oninput="distSetCdPct(this.value)"><span class="pc">%</span></div><div class="pctsub"><span class="badge b-info">reserva do CD</span></div></div>';
-  chips+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);const busy=distBusy===s.id;
-    const acts=busy?'<span class="badge b-info">lendo…</span>':('<button class="lk" onclick="distPick(\''+s.id+'\')">anexar</button>'+(itens?' · <button class="lk dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':''));
-    const ped=itens?'<span class="badge b-ok">'+itens+'i · '+fmt(un)+'un</span>':'<span class="badge b-mut">sem arquivo</span>';
-    return '<div class="pctchip dist"><div class="pctrow"><span class="nm">'+distEscAttr(deShortName({id:s.id,name:s.name}))+'</span><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span></div><div class="pctsub">'+ped+' '+acts+'</div></div>';}).join('');
-  el.innerHTML='<div class="pctwrap">'+chips+'</div>';
+  let html='<div class="pctcd"><span class="nm" style="font-weight:700;color:var(--brand-d)">CD — fica no estoque</span><input type="number" min="0" value="'+(+DIST.cdPct||0)+'" oninput="distSetCdPct(this.value)"><span class="pc">%</span><span class="ped" style="font-size:10.5px;color:var(--brand-d)">reserva do CD</span><span class="act"></span></div>';
+  html+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+b,0);const busy=distBusy===s.id;
+    const acts=busy?'<span class="badge b-info">lendo…</span>':('<button class="lk" onclick="distPick(\''+s.id+'\')">anexar</button>'+(itens?' <button class="lk dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':''));
+    const ped=itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>';
+    return '<div class="pctrow"><span class="nm">'+distEscAttr(s.name)+'</span><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span><span class="ped">'+ped+'</span><span class="act">'+acts+'</span></div>';}).join('');
+  el.innerHTML='<div class="pctlist">'+html+'</div>';
   updateDistSum();
 }
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
@@ -1939,7 +1938,7 @@ function renderDivEnt(){
 }
 function renderDeDests(){
   const el=$('#de-dests');if(!el)return;
-  el.innerHTML='<div class="pctwrap">'+entDests().map(d=>{const isCd=d.id==='cd';return '<div class="pctchip'+(isCd?' cd':'')+'"><span class="nm">'+distEscAttr(deShortName(d))+'</span><input type="number" min="0" value="'+(+ENT.pct[d.id]||0)+'" oninput="deSetPct(\''+d.id+'\',this.value)"><span class="pc">%</span></div>';}).join('')+'</div>';
+  el.innerHTML='<div class="pctlist">'+entDests().map(d=>{const isCd=d.id==='cd';return '<div class="'+(isCd?'pctcd':'pctrow')+'"><span class="nm"'+(isCd?' style="font-weight:700;color:var(--brand-d)"':'')+'>'+distEscAttr(d.name)+'</span><input type="number" min="0" value="'+(+ENT.pct[d.id]||0)+'" oninput="deSetPct(\''+d.id+'\',this.value)"><span class="pc">%</span>'+(isCd?'<span class="ped" style="font-size:10.5px;color:var(--brand-d)">também recebe</span>':'')+'</div>';}).join('')+'</div>';
   deUpdateSum();
 }
 function deShortName(d){return d.id==='cd'?'CD':d.name.replace(/^Loja\s+/i,'');}
@@ -2032,7 +2031,7 @@ function rdUpdateSum(){const t=entDests().reduce((a,d)=>a+(+RDIST.pct[d.id]||0),
 function rdUpdateModeBtns(){['rd-btn-igual','rd-btn-venda'].forEach(id=>{const b=$('#'+id);if(b)b.classList.remove('pri');});const act={igual:'rd-btn-igual',venda:'rd-btn-venda'}[RDIST.mode];if(act){const b=$('#'+act);if(b)b.classList.add('pri');}}
 function rdDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.floor(100/n);ds.forEach(d=>RDIST.pct[d.id]=base);RDIST.pct[ds[0].id]+=100-base*n;RDIST.over={};RDIST.edited={};RDIST.mode='igual';persistRdist();renderRdist();}
 function rdDividirVenda(){if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}const cd=+RDIST.pct['cd']||0;const rest=Math.max(0,100-cd);const lojas=FIXED_STORES.map(a=>a[0]);const total=lojas.reduce((a,id)=>a+(VENDAS[id]||0),0);if(total<=0){toast('Vendas zeradas','warn');return;}const raw=lojas.map(id=>{const exact=(VENDAS[id]||0)/total*rest;return {id,exact,base:Math.floor(exact)};});let rem=rest-raw.reduce((a,o)=>a+o.base,0);raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});raw.forEach(o=>RDIST.pct[o.id]=o.base);RDIST.pct['cd']=cd;RDIST.over={};RDIST.edited={};RDIST.mode='venda';persistRdist();renderRdist();toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');}
-function renderRdistDests(){const el=$('#rd-dests');if(!el)return;el.innerHTML='<div class="pctwrap">'+entDests().map(d=>{const isCd=d.id==='cd';return '<div class="pctchip'+(isCd?' cd':'')+'"><span class="nm">'+distEscAttr(deShortName(d))+'</span><input type="number" min="0" value="'+(+RDIST.pct[d.id]||0)+'" oninput="rdSetPct(\''+d.id+'\',this.value)"><span class="pc">%</span></div>';}).join('')+'</div>';rdUpdateSum();}
+function renderRdistDests(){const el=$('#rd-dests');if(!el)return;el.innerHTML='<div class="pctlist">'+entDests().map(d=>{const isCd=d.id==='cd';return '<div class="'+(isCd?'pctcd':'pctrow')+'"><span class="nm"'+(isCd?' style="font-weight:700;color:var(--brand-d)"':'')+'>'+distEscAttr(d.name)+'</span><input type="number" min="0" value="'+(+RDIST.pct[d.id]||0)+'" oninput="rdSetPct(\''+d.id+'\',this.value)"><span class="pc">%</span>'+(isCd?'<span class="ped" style="font-size:10.5px;color:var(--brand-d)">também recebe</span>':'')+'</div>';}).join('')+'</div>';rdUpdateSum();}
 function fillRdLojaSel(){const sel=$('#rd-prod-loja');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas</option>'+entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(deShortName(d))+'</option>').join('');if(cur)sel.value=cur;}
 function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.items.length>0;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
 function renderRdistProds(){const body=$('#rd-prod-body');if(!body)return;const alloc=divEntCompute(RDIST);const ds=entDests();let kRec=0,kDist=0;RDIST.items.forEach(it=>{const a=alloc[it.cod]||{};kRec+=(+it.qtd||0);kDist+=Object.values(a).reduce((x,y)=>x+y,0);});
