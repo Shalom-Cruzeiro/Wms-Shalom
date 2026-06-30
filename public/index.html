@@ -867,8 +867,13 @@ function exportCatalog(){
 
 /* ---------- IMPORT (planilha -> cadastro) ---------- */
 function onCatFile(ev){
-  const f=ev.target.files[0];if(!f)return;
+  const f=ev.target.files&&ev.target.files[0];
+  ev.target.value='';
+  if(!f){toast('Nenhum arquivo selecionado','warn');return;}
+  if(typeof XLSX==='undefined'){alert('A biblioteca de leitura de planilhas (XLSX) não carregou. Verifique a conexão e recarregue a página (Ctrl+F5).');return;}
+  toast('Lendo "'+f.name+'"…','info');
   const r=new FileReader();
+  r.onerror=()=>{alert('Não consegui ler o arquivo (FileReader). Tente fechar o arquivo no Excel e subir de novo.');};
   r.onload=()=>{
     try{
       const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});
@@ -905,6 +910,7 @@ function onCatFile(ev){
           switchTab('cadastro');
           $('#mapcard').style.display='';
           $('#mapcard').scrollIntoView({behavior:'smooth',block:'nearest'});
+          toast('Registro de Inventário: '+processed.length+' produtos. Confira a prévia e clique em "Importar para o cadastro".','ok');
           return;
         }
       }
@@ -927,9 +933,9 @@ function onCatFile(ev){
       switchTab('cadastro');
       $('#mapcard').style.display='';rebuildImport();
       $('#mapcard').scrollIntoView({behavior:'smooth',block:'nearest'});
-    }catch(e){toast('Não consegui ler o arquivo: '+e.message,'err');}
+    }catch(e){toast('Não consegui ler o arquivo: '+e.message,'err');alert('Erro ao ler o arquivo: '+e.message);}
   };
-  r.readAsArrayBuffer(f);ev.target.value='';
+  r.readAsArrayBuffer(f);
 }
 /* Processa o arquivo bruto do Microvix: cruza as abas de fornecedor com "Todos os códigos" */
 const SIZE_SET=new Set(['PP','P','M','G','GG','GGG','XG','XGG','EG','EGG','2GG','3GG','4GG','U','UN','UNICA']);
