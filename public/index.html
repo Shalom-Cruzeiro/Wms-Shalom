@@ -258,6 +258,7 @@
       <div class="tb-acts">
         <button class="btn pri" onclick="document.getElementById('catfile').click()">Importar base de cadastros</button>
         <input type="file" id="catfile" accept=".xlsx,.xls,.csv" onchange="onCatFile(event)">
+        <button class="btn sm gho dgr" onclick="limparCadastro()" title="Apaga toda a base de produtos para reimportar do zero">Limpar cadastro</button>
       </div>
     </div>
     <div class="content">
@@ -1002,6 +1003,14 @@ function guessCol(headers,keywords,exclude){for(const kw of keywords)for(let i=0
 function impPreview(){const ie=+$('#m_ean').value,id=+$('#m_desc').value,it=+$('#m_tam').value;
   return imp.rows.map(row=>({ean:ie>=0?String(row[ie]||'').trim():'',desc:id>=0?String(row[id]||'').trim():'',tam:it>=0?String(row[it]||'').trim():''})).filter(p=>p.ean);}
 function rebuildImport(){if(!imp)return;const prev=impPreview();$('#map-info').textContent=prev.length+' itens válidos. Ex.: '+(prev[0]?`${prev[0].ean} · ${prev[0].desc||'—'} · ${prev[0].tam||'—'}`:'nenhum (confira as colunas)');}
+function limparCadastro(){
+  if(!CATALOG.length){toast('O cadastro já está vazio','warn');return;}
+  if(!confirm('Apagar TODA a base de produtos ('+CATALOG.length+' itens)?\n\nUse isto antes de reimportar a base limpa. Vagas, contagem e estoque não são afetados.'))return;
+  if(!confirm('Tem certeza? Esta ação não tem volta.'))return;
+  CATALOG=[];buildIndex();persistCatalog();renderCatalog();
+  if(typeof renderEstoque==='function')renderEstoque();
+  toast('Cadastro apagado. Agora importe a base novamente.','ok');
+}
 function confirmImport(){
   if(!imp)return;
   const prev=imp.microvix?imp.processed:impPreview();
@@ -1720,11 +1729,12 @@ function renderDistE1(){
   else if(sel!=='__all')codes=codes.filter(cod=>((DIST.demand[sel]||{})[cod]||0)>0||distEffRecebe(res,cod,sel)>0);
   if(!codes.length){body.innerHTML='<div class="empty">Nada para mostrar com os filtros atuais.</div>';return;}
   const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th>Vaga</th><th class="r">Disp. CD</th>'+
-    cols.map(s=>'<th class="de-th" title="'+distEscAttr(s.name)+'">'+distEscAttr(deShortName({id:s.id,name:s.name}))+'<div style="font-weight:600;color:var(--soft)">'+(+s.pct||0)+'%</div></th>').join('')+'</tr></thead><tbody>';
+    cols.map(s=>'<th class="de-th" title="'+distEscAttr(s.name)+'">'+distEscAttr(deShortName({id:s.id,name:s.name}))+'<div style="font-weight:600;color:var(--soft)">'+(+s.pct||0)+'%</div></th>').join('')+'<th class="r">Enviado</th></tr></thead><tbody>';
   const rows=codes.map(cod=>{const r=res[cod];
+    let env=0;DIST.stores.forEach(s=>{env+=distEffRecebe(res,cod,s.id);});const ecol=env>r.disp?'var(--err)':'var(--ink)';
     const cells=cols.map(s=>{const ped=(DIST.demand[s.id]||{})[cod]||0;const got=distEffRecebe(res,cod,s.id);const ed=DIST.edited[cod+'|'+s.id]?' de-edited':'';
       return '<td class="de-cell'+ed+'"><div class="de-stk" title="pediu">'+ped+'</div><input class="de-cin" type="number" min="0" value="'+got+'" onchange="distCellEdit(\''+cod+'\',\''+s.id+'\',this.value)"></td>';}).join('');
-    return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'</tr>';}).join('');
+    return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'<td class="r num" title="total enviado às lojas (não pode passar do Disp. CD)"><b style="color:'+ecol+'">'+env+'</b></td></tr>';}).join('');
   body.innerHTML=head+rows+'</tbody></table><div class="bd" style="border-top:1px solid var(--line2);font-size:11.5px;color:var(--soft)">O nº pequeno em cinza é o que a loja pediu. Edite a quantidade a enviar direto na célula (fica amarela).</div>';
 }
 function renderDistE2(){
@@ -1974,13 +1984,13 @@ function renderDivEntProds(){
   if(terms.length)items=items.filter(o=>{const hay=norm((o.it.desc||'')+' '+(o.it.ean||'')+' '+(o.it.cod||''));return terms.every(t=>hay.includes(t));});
   if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
   const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">Receb.</th>'+
-    ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
-  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);
-    const overTot=distq!==(+it.qtd||0);
+    ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th class="r">Total</th><th></th></tr></thead><tbody>';
+  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);const qtd=+it.qtd||0;
+    const overTot=distq!==qtd;const tcol=distq>qtd?'var(--err)':(distq<qtd?'var(--warn)':'var(--ok)');
     const cells=ds.map(d=>{const ed=ENT.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';
       return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="deCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');
-    return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
-  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+5)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
+    return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+qtd+'</b></td>'+cells+'<td class="r num" title="soma distribuída"><b style="color:'+tcol+'">'+distq+'</b></td><td class="r"><button class="btn sm gho dgr" onclick="divEntDelItem('+i+')">×</button></td></tr>';}).join('');
+  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+6)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
   const s=$('#de-prod-sub');if(s){const cov=leN()?ENT.items.filter(it=>Object.keys(leStock(it)).length).length:0;const covTxt=leN()?(' · <b style="color:'+(cov?'var(--ok)':'var(--warn)')+'">'+cov+'/'+ENT.items.length+' com estoque por loja</b>'):' · <span style="color:var(--warn)">importe o estoque por loja</span>';s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens'+(items.length!==ENT.items.length?' · '+items.length+' no filtro':'')+covTxt;}
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
@@ -2054,9 +2064,9 @@ function fillRdLojaSel(){const sel=$('#rd-prod-loja');if(!sel)return;const cur=s
 function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.items.length>0;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
 function renderRdistProds(){const body=$('#rd-prod-body');if(!body)return;const alloc=divEntCompute(RDIST);const ds=entDests();let kRec=0,kDist=0;RDIST.items.forEach(it=>{const a=alloc[it.cod]||{};kRec+=(+it.qtd||0);kDist+=Object.values(a).reduce((x,y)=>x+y,0);});
   const terms=norm(($('#rd-prod-filter')||{}).value||'').split(/\s+/).filter(Boolean);const lojaF=(($('#rd-prod-loja')||{}).value)||'__all';let items=RDIST.items.map((it,i)=>({it,i}));if(terms.length)items=items.filter(o=>{const hay=norm((o.it.desc||'')+' '+(o.it.ean||'')+' '+(o.it.cod||''));return terms.every(t=>hay.includes(t));});if(lojaF!=='__all')items=items.filter(o=>((alloc[o.it.cod]||{})[lojaF]||0)>0);
-  const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">A dividir</th>'+ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th></th></tr></thead><tbody>';
-  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);const overTot=distq!==(+it.qtd||0);const cells=ds.map(d=>{const ed=RDIST.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="rdCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+(+it.qtd||0)+'</b></td>'+cells+'<td class="r"><button class="btn sm gho dgr" onclick="rdDelItem('+i+')">×</button></td></tr>';}).join('');
-  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+5)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
+  const head='<table style="min-width:max-content"><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th class="r">A dividir</th>'+ds.map(d=>'<th class="de-th'+(d.id===lojaF?'" style="background:#dcebff"':(d.id==='cd'?'" style="background:#eef5ff"':'"'))+' title="'+distEscAttr(d.name)+'">'+distEscAttr(deShortName(d))+'</th>').join('')+'<th class="r">Total</th><th></th></tr></thead><tbody>';
+  const rows=items.map(o=>{const it=o.it,i=o.i;const a=alloc[it.cod]||{};const stock=leStock(it);const distq=Object.values(a).reduce((x,y)=>x+y,0);const qtd=+it.qtd||0;const overTot=distq!==qtd;const tcol=distq>qtd?'var(--err)':(distq<qtd?'var(--warn)':'var(--ok)');const cells=ds.map(d=>{const ed=RDIST.edited[it.cod+'|'+d.id]?' de-edited':'';const stk=stock[d.id]||0;const hl=d.id===lojaF?';box-shadow:inset 0 0 0 2px #bcd8ff':'';return '<td class="de-cell'+(d.id==='cd'?' cd':'')+ed+'" style="'+hl+'"><div class="de-stk" title="estoque atual">'+stk+'</div><input class="de-cin" type="number" min="0" value="'+(a[d.id]||0)+'" onchange="rdCellEdit(\''+it.cod+'\',\''+d.id+'\',this.value)"></td>';}).join('');return '<tr><td class="mono">'+it.cod+'</td><td><span class="mono" style="font-size:11px">'+(it.ean||'—')+'</span></td><td style="min-width:200px">'+(it.desc||'(sem descrição)')+'</td><td class="r num"><b'+(overTot?' style="color:var(--warn)"':'')+'>'+qtd+'</b></td>'+cells+'<td class="r num" title="soma distribuída"><b style="color:'+tcol+'">'+distq+'</b></td><td class="r"><button class="btn sm gho dgr" onclick="rdDelItem('+i+')">×</button></td></tr>';}).join('');
+  body.innerHTML=head+(rows||'<tr><td colspan="'+(ds.length+6)+'" style="text-align:center;color:var(--muted);padding:20px">Nada no filtro.</td></tr>')+'</tbody></table>';
   const s=$('#rd-prod-sub');if(s)s.innerHTML=RDIST.items.length+' itens'+(items.length!==RDIST.items.length?' · '+items.length+' no filtro':'')+' · base: <b>'+(RDIST.base==='total'?'estoque total':'estoque do CD')+'</b>';
   $('#rd-k-itens').textContent=fmt(RDIST.items.length);$('#rd-k-rec').textContent=fmt(kRec);$('#rd-k-dist').textContent=fmt(kDist);}
 function rdCellEdit(cod,dest,val){const it=RDIST.items.find(x=>x.cod===cod);if(!it)return;if(!RDIST.over[cod]){const alloc=divEntCompute(RDIST);RDIST.over[cod]=Object.assign({},alloc[cod]||{});}const q=Math.max(0,parseInt(val)||0);if(q>0)RDIST.over[cod][dest]=q;else delete RDIST.over[cod][dest];RDIST.edited[cod+'|'+dest]=1;persistRdist();renderRdistProds();}
