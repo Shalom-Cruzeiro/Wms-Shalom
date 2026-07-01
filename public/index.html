@@ -530,6 +530,8 @@
         <input type="file" id="de-loja-file" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
         <button class="btn pri" onclick="document.getElementById('de-xml-file').click()">Importar XML</button>
         <input type="file" id="de-xml-file" accept=".xml" multiple onchange="onDivEntXml(event)">
+        <button class="btn sm" onclick="enSalvar()">Salvar divisão</button>
+        <button class="btn sm gho" onclick="openEnHist()">Salvos</button>
         <button class="btn sm gho dgr" onclick="divEntLimpar()">Limpar</button>
       </div>
     </div>
@@ -578,6 +580,8 @@
         </select>
         <button class="btn sm gho" onclick="document.getElementById('rd-loja-file').click()">Importar estoque por loja</button>
         <input type="file" id="rd-loja-file" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
+        <button class="btn sm" onclick="rdSalvar()">Salvar divisão</button>
+        <button class="btn sm gho" onclick="openRdHist()">Salvos</button>
         <button class="btn sm gho dgr" onclick="rdLimpar()">Limpar</button>
       </div>
     </div>
