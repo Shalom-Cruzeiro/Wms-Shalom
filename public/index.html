@@ -365,9 +365,9 @@
           <span style="font-size:12px;color:var(--muted);font-weight:600">Ver:</span>
           <select class="sel" id="est-loja" onchange="renderEstoque()"></select>
           <input class="t" id="est-filter" placeholder="Filtrar…" style="padding:7px 10px;font-size:13px;width:150px" oninput="renderEstoque()">
-          <button class="btn pri" onclick="document.getElementById('est-loja-file2').click()">Importar estoque por loja</button>
+          <button class="btn pri" onclick="document.getElementById('est-loja-file2').click()" title="Sobe só o estoque das lojas; não altera o CD">Importar estoque das lojas</button>
           <input type="file" id="est-loja-file2" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
-          <button class="btn sm gho" onclick="document.getElementById('invfile').click()">Importar inventário (saldo)</button>
+          <button class="btn" onclick="document.getElementById('invfile').click()" title="Sobe só o inventário do CD; não altera as lojas">Importar inventário do CD</button>
           <input type="file" id="invfile" accept=".xlsx,.xls,.csv" onchange="onInvSaldoFile(event)">
           <button class="btn sm" onclick="exportEstoque()">Exportar Excel</button>
         </div>
@@ -526,8 +526,10 @@
     <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap">
       <div style="font-size:12px;color:var(--muted)" id="de-loja-status">Estoque por loja: não importado</div>
       <div style="margin-left:auto;display:flex;gap:9px;flex-wrap:wrap">
-        <button class="btn sm gho" onclick="document.getElementById('de-loja-file').click()">Importar estoque por loja</button>
+        <button class="btn sm gho" onclick="document.getElementById('de-loja-file').click()" title="Só as lojas; não altera o CD">Estoque das lojas</button>
         <input type="file" id="de-loja-file" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
+        <button class="btn sm gho" onclick="document.getElementById('de-cd-file').click()" title="Só o CD; não altera as lojas">Inventário do CD</button>
+        <input type="file" id="de-cd-file" accept=".xlsx,.xls,.csv" onchange="onInvSaldoFile(event)">
         <button class="btn pri" onclick="document.getElementById('de-xml-file').click()">Importar XML</button>
         <input type="file" id="de-xml-file" accept=".xml" multiple onchange="onDivEntXml(event)">
         <button class="btn sm" onclick="enSalvar()">Salvar divisão</button>
@@ -578,8 +580,10 @@
           <option value="cd">do CD (envia p/ lojas)</option>
           <option value="total">total (CD + lojas)</option>
         </select>
-        <button class="btn sm gho" onclick="document.getElementById('rd-loja-file').click()">Importar estoque por loja</button>
+        <button class="btn sm gho" onclick="document.getElementById('rd-loja-file').click()" title="Só as lojas; não altera o CD">Estoque das lojas</button>
         <input type="file" id="rd-loja-file" accept=".xlsx,.xls,.csv" onchange="onLojaEstFile(event)">
+        <button class="btn sm gho" onclick="document.getElementById('rd-cd-file').click()" title="Só o CD; não altera as lojas">Inventário do CD</button>
+        <input type="file" id="rd-cd-file" accept=".xlsx,.xls,.csv" onchange="onInvSaldoFile(event)">
         <button class="btn sm" onclick="rdSalvar()">Salvar divisão</button>
         <button class="btn sm gho" onclick="openRdHist()">Salvos</button>
         <button class="btn sm gho dgr" onclick="rdLimpar()">Limpar</button>
@@ -726,12 +730,14 @@ function saldoOf(cod){return SALDO[String(cod).trim()]||0;}
 function stockList(){return Object.keys(SALDO).map(cod=>{const p=byCod[cod]||{};return {cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:SALDO[cod]};});}
 function fillEstLojaSel(){const sel=$('#est-loja');if(!sel)return;if(sel.options.length)return;sel.innerHTML=entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(d.id==='cd'?'CD — Matriz':d.name)+'</option>').join('')+'<option value="total">Total (todas)</option>';}
 function estScopeList(scope){
-  const items=[];const haveLE=leN()>0;
-  if(haveLE){
-    Object.keys(LOJAEST.byCod).forEach(cod=>{const o=LOJAEST.byCod[cod];let q;if(scope==='total')q=entDests().reduce((a,d)=>a+(o[d.id]||0),0);else q=o[scope]||0;if(q>0){const p=byCod[cod]||{};items.push({cod:cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:q});}});
-    return items;
-  }
-  return stockList();
+  const items=[];const push=(cod,q)=>{const p=byCod[cod]||{};items.push({cod:cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:q});};
+  const stores=FIXED_STORES.map(a=>a[0]);
+  if(scope==='cd'){Object.keys(SALDO).forEach(cod=>{const q=SALDO[cod]||0;if(q>0)push(cod,q);});return items;}
+  if(scope==='total'){const seen={};Object.keys(LOJAEST.byCod||{}).forEach(c=>seen[c]=1);Object.keys(SALDO).forEach(c=>seen[c]=1);
+    Object.keys(seen).forEach(cod=>{const s=(LOJAEST.byCod||{})[cod]||{};let q=SALDO[cod]||0;stores.forEach(id=>q+=(s[id]||0));if(q>0)push(cod,q);});return items;}
+  // loja específica
+  Object.keys(LOJAEST.byCod||{}).forEach(cod=>{const q=(LOJAEST.byCod[cod]||{})[scope]||0;if(q>0)push(cod,q);});
+  return items;
 }
 function renderEstoque(){
   fillEstLojaSel();
@@ -743,11 +749,11 @@ function renderEstoque(){
   const totU=items.reduce((a,b)=>a+(b.saldo||0),0), totS=items.length;
   if(terms.length)items=items.filter(x=>{const forn=(byCod[x.cod]||{}).forn||'';const hay=norm((x.desc||'')+' '+(x.ean||'')+' '+(x.cod||'')+' '+(x.tam||'')+' '+forn);return terms.every(t=>hay.includes(t));});
   items.sort((a,b)=>(b.saldo||0)-(a.saldo||0));
-  const scopeLbl=!haveLE?'inventário (saldo)':(scope==='total'?'total (todas as lojas + CD)':(scope==='cd'?'CD — Matriz':(entDests().find(d=>d.id===scope)||{}).name));
+  const scopeLbl=(scope==='total'?'total (CD + lojas)':(scope==='cd'?'CD — Matriz':(entDests().find(d=>d.id===scope)||{}).name||scope));
   $('#est-sub').textContent=scopeLbl+' · '+fmt(totS)+' itens · '+fmt(totU)+' un'+(terms.length?' · '+items.length+' no filtro':'');
   const body=$('#est-body');
-  if(!totS){body.innerHTML=haveLE?'<div class="empty"><div class="big">≣</div>Sem saldo neste destino</div>':'<div class="empty"><div class="big">≣</div>Importe o estoque por loja (ou o inventário)</div>';return;}
-  const showVaga=(scope==='cd'||!haveLE);
+  if(!totS){const msg=scope==='cd'?'Importe o inventário do CD':(scope==='total'?'Importe o inventário do CD e o estoque das lojas':'Importe o estoque por loja');body.innerHTML='<div class="empty"><div class="big">≣</div>'+msg+'</div>';return;}
+  const showVaga=(scope==='cd');
   const cap=600, rows=items.slice(0,cap);
   body.innerHTML=`<table><thead><tr><th>Código de barras</th><th>Cód. produto</th><th>Descrição</th><th>Fornecedor</th><th>Tamanho</th>${showVaga?'<th>Vaga</th>':''}<th class="r">Saldo</th></tr></thead><tbody>${
     rows.map(x=>{const vaga=vagaOf(x.cod);const forn=(byCod[x.cod]||{}).forn||'';return `<tr>
@@ -817,7 +823,7 @@ async function applyInvSaldo(items){
   await logMov('inventario','Importação de saldo',items.map(it=>({cod:it.cod,qtd:it.saldo})));
   const totU=items.reduce((a,b)=>a+b.saldo,0);
   toast('Inventário importado: '+fmt(items.length)+' itens · '+fmt(totU)+' un'+(added?' · '+added+' novos no cadastro':''),'ok');
-  renderEstoque();renderStats();if(typeof onContagem==='function'&&onContagem())renderCount();
+  renderEstoque();renderStats();if(typeof renderDivEnt==='function')renderDivEnt();if(typeof renderRdist==='function')renderRdist();if(typeof onContagem==='function'&&onContagem())renderCount();
 }
 
 /* ---------- CADASTRO ---------- */
@@ -1877,7 +1883,9 @@ let ENT={docs:[],items:[],pct:{},over:{},edited:{},mode:''};
 var deEditIdx=-1;
 function entDests(){return [{id:'cd',name:'CD (fica no estoque)'}].concat(FIXED_STORES.map(a=>({id:a[0],name:a[1]})));}
 function leN(){return LOJAEST&&LOJAEST.byCod?Object.keys(LOJAEST.byCod).length:0;}
-function leStock(it){if(!LOJAEST)return {};return (LOJAEST.byCod&&LOJAEST.byCod[it.cod])||(it&&it.ean&&LOJAEST.byEan&&LOJAEST.byEan[it.ean])||{};}
+function leStores(it){return (LOJAEST&&LOJAEST.byCod&&LOJAEST.byCod[it.cod])||(it&&it.ean&&LOJAEST.byEan&&LOJAEST.byEan[it.ean])||{};}
+function leStock(it){const s=leStores(it);const o=Object.assign({},s);delete o.cd;const cd=(typeof SALDO!=='undefined'&&SALDO[it.cod])||0;if(cd)o.cd=cd;return o;}
+function rebuildLeEan(){const be={};if(LOJAEST&&LOJAEST.byCod)Object.keys(LOJAEST.byCod).forEach(cod=>{const p=(typeof byCod!=='undefined')?byCod[cod]:null;const ean=p&&((p.eans&&p.eans[0])||p.ean);if(ean)be[ean]=LOJAEST.byCod[cod];});LOJAEST.byEan=be;}
 async function loadLojaEst(){const d=await store.get(K_LOJAEST);if(d&&d.byCod)LOJAEST=d;else if(d&&typeof d==='object')LOJAEST={byCod:d,byEan:{}};else LOJAEST={byCod:{},byEan:{}};}
 async function loadEnt(){const d=await store.get(K_ENT);if(d&&d.items)ENT=Object.assign({docs:[],items:[],pct:{},over:{},edited:{},mode:''},d);}
 async function persistEnt(){await store.set(K_ENT,ENT);}
@@ -1899,8 +1907,10 @@ function onLojaEstFile(ev){
   const r=new FileReader();
   r.onload=async()=>{try{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,blankrows:false,defval:''});const parsed=parseLojaEstoque(aoa);
     if(!parsed||!Object.keys(parsed.byCod).length){toast('Não reconheci o arquivo de estoque por loja','warn');return;}
-    LOJAEST=parsed;const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
-    renderDivEnt();if(typeof renderEstoque==='function')renderEstoque();if(typeof renderRdist==='function')renderRdist();toast(Object.keys(parsed.byCod).length+' produtos com estoque por loja importados','ok');
+    const byCod2={};Object.keys(parsed.byCod).forEach(cod=>{const src=parsed.byCod[cod];const o={};Object.keys(src).forEach(k=>{if(k!=='cd')o[k]=src[k];});if(Object.keys(o).length)byCod2[cod]=o;});
+    LOJAEST={byCod:byCod2,byEan:{}};rebuildLeEan();
+    const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
+    renderDivEnt();if(typeof renderEstoque==='function')renderEstoque();if(typeof renderRdist==='function')renderRdist();toast(Object.keys(byCod2).length+' produtos com estoque das lojas (o CD não foi alterado)','ok');
   }catch(e){toast('Erro ao ler: '+e.message,'err');}};
   r.readAsArrayBuffer(f);ev.target.value='';
 }
@@ -2092,7 +2102,7 @@ let RDIST={items:[],pct:{},over:{},edited:{},mode:'',base:'cd',done:false};
 const K_RDIST='inv_rdist_v1';
 async function loadRdist(){const d=await store.get(K_RDIST);if(d&&d.items)RDIST=Object.assign({items:[],pct:{},over:{},edited:{},mode:'',base:'cd',done:false},d);}
 async function persistRdist(){await store.set(K_RDIST,RDIST);}
-function rdBaseQty(cod){const s=(LOJAEST.byCod&&LOJAEST.byCod[cod])||{};if(RDIST.base==='total')return entDests().reduce((a,d)=>a+(s[d.id]||0),0);return s['cd']||0;}
+function rdBaseQty(cod){const s=(LOJAEST.byCod&&LOJAEST.byCod[cod])||{};const cd=(typeof SALDO!=='undefined'&&SALDO[cod])||0;if(RDIST.base==='total'){let t=cd;FIXED_STORES.forEach(a=>t+=(s[a[0]]||0));return t;}return cd;}
 function rdRefreshQty(){RDIST.items.forEach(it=>{it.qtd=rdBaseQty(it.cod);});}
 function fillRdForn(){const sel=$('#rd-forn');if(!sel)return;const cur=sel.value;const set={};CATALOG.forEach(p=>{if(p.forn)set[p.forn]=(set[p.forn]||0)+1;});const forns=Object.keys(set).sort((a,b)=>a.localeCompare(b));sel.innerHTML='<option value="">— escolha um fornecedor —</option>'+forns.map(f=>'<option value="'+f.replace(/"/g,'&quot;')+'">'+distEscAttr(f)+' ('+set[f]+')</option>').join('');if(cur)sel.value=cur;}
 function rdAddItem(p,silent){if(!p)return false;if(RDIST.items.some(x=>x.cod===p.cod))return false;const q=rdBaseQty(p.cod);if(q<=0){if(!silent)toast('Sem estoque para dividir','warn');return false;}RDIST.items.push({cod:p.cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',qtd:q});return true;}
