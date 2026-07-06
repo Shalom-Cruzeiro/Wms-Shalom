@@ -1763,12 +1763,14 @@ function renderDistE1(){
     return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'<td class="r num" title="total enviado às lojas (não pode passar do Disp. CD)"><b style="color:'+ecol+'">'+env+'</b></td></tr>';}).join('');
   body.innerHTML=head+rows+'</tbody></table><div class="bd" style="border-top:1px solid var(--line2);font-size:11.5px;color:var(--soft)">O nº pequeno em cinza é o que a loja pediu. Edite a quantidade a enviar direto na célula (fica amarela).</div>';
 }
+function distStoreCov(cod){const s=leStores({cod:cod,ean:distEan(cod)});const by={};let tot=0;DIST.stores.forEach(st=>{const q=(s&&s[st.id])||0;if(q){by[st.id]=q;tot+=q;}});return {tot:tot,by:by};}
+function distCovText(cov){return DIST.stores.filter(s=>cov.by[s.id]).map(s=>s.name+': '+cov.by[s.id]).join(' · ');}
 function renderDistE2(){
   const res=distCompute();const body=$('#dist-e2-body');if(!body)return;
   const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0).sort((a,b)=>b.comprar-a.comprar);
-  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th class="r">Pedido</th><th class="r">Tem no CD</th><th class="r">Comprar</th></tr></thead><tbody>'+
-    (rows.length?rows.map(r=>'<tr><td class="mono">'+r.cod+'</td><td>'+distEanCell(r.cod)+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(r.cod)+'</td><td class="r num">'+r.totalPed+'</td><td class="r num" style="color:var(--muted)">'+r.atendivel+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td></tr>').join(''):'<tr><td colspan=7 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
-    '</tbody></table><div class="bd" style="border-top:1px solid var(--line2);text-align:right;font-size:12.5px;color:var(--muted)">Total a comprar: <b style="color:var(--warn);font-family:var(--mono)">'+fmt(rows.reduce((a,r)=>a+r.comprar,0))+'</b> un</div>';
+  body.innerHTML='<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th class="r">Pedido</th><th class="r">Tem no CD</th><th class="r">Comprar</th><th class="r">Nas lojas</th></tr></thead><tbody>'+
+    (rows.length?rows.map(r=>{const cov=distStoreCov(r.cod);const covCell=cov.tot>0?'<span class="badge b-ok" title="'+distEscAttr(distCovText(cov))+'">'+cov.tot+'</span>':'<span style="color:var(--soft)">—</span>';return '<tr><td class="mono">'+r.cod+'</td><td>'+distEanCell(r.cod)+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(r.cod)+'</td><td class="r num">'+r.totalPed+'</td><td class="r num" style="color:var(--muted)">'+r.atendivel+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td><td class="r">'+covCell+'</td></tr>';}).join(''):'<tr><td colspan=8 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
+    '</tbody></table><div class="bd" style="border-top:1px solid var(--line2);display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)"><span>“Nas lojas” = soma do estoque nas lojas (passe o mouse para ver onde). Se tiver, dá para transferir em vez de comprar.</span><span>Total a comprar: <b style="color:var(--warn);font-family:var(--mono)">'+fmt(rows.reduce((a,r)=>a+r.comprar,0))+'</b> un</span></div>';
 }
 function distEtapa(n){distStep=n;const e1=$('#dist-e1'),e2=$('#dist-e2');if(e1)e1.style.display=n===1?'':'none';if(e2)e2.style.display=n===2?'':'none';const s1=$('#dst-1'),s2=$('#dst-2');if(s1)s1.classList.toggle('on',n===1);if(s2)s2.classList.toggle('on',n===2);renderDist();}
 function renderDist(){renderDistLojas();fillDistLojaSel();distCompute();if(distStep===1)renderDistE1();else renderDistE2();}
@@ -1784,9 +1786,11 @@ function exportCarga(){
 function exportCompra(){
   const res=distCompute();const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0).sort((a,b)=>b.comprar-a.comprar);
   if(!rows.length){toast('Nada a comprar','warn');return;}
-  const aoa=[['Cod. Produto','Cod. Barras','Descricao','Fornecedor','Pedido','Tem no CD','Comprar']];
-  rows.forEach(r=>aoa.push([r.cod,distEan(r.cod),r.desc,r.forn,r.totalPed,r.atendivel,r.comprar]));
-  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:15},{wch:42},{wch:22},{wch:10},{wch:10},{wch:10}];
+  const head=['Cod. Produto','Cod. Barras','Descricao','Fornecedor','Pedido','Tem no CD','Comprar','Total nas lojas'].concat(DIST.stores.map(s=>s.name));
+  const aoa=[head];
+  rows.forEach(r=>{const cov=distStoreCov(r.cod);const line=[r.cod,distEan(r.cod),r.desc,r.forn,r.totalPed,r.atendivel,r.comprar,cov.tot];DIST.stores.forEach(s=>line.push(cov.by[s.id]||0));aoa.push(line);});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:15},{wch:42},{wch:22},{wch:9},{wch:9},{wch:9},{wch:12}].concat(DIST.stores.map(()=>({wch:10})));
   XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'sugestao_compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
 }
 
