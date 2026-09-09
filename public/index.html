@@ -1044,12 +1044,13 @@ function confirmImport(){
   let add=0,upd=0;prev.forEach(p=>{
     const ex=(p.cod&&byCod[p.cod])||(p.ean&&byEan[p.ean]);
     if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.forn)ex.forn=p.forn;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
-    else{CATALOG.push(p.eans?p:{cod:p.cod||'',ean:p.ean||'',eans:p.ean?[p.ean]:[],desc:p.desc,tam:p.tam});add++;}
+    else{CATALOG.push({cod:p.cod||'',ean:(p.eans&&p.eans[0])||p.ean||'',eans:p.eans||(p.ean?[p.ean]:[]),desc:p.desc||'',tam:p.tam||'',forn:p.forn||''});add++;}
   });
   buildIndex();persistCatalog();renderCatalog();
   if(onContagem())renderCount();
   imp=null;$('#mapcard').style.display='none';$('#map-cols').style.display='';
-  toast(replace?('Base substituída: '+add+' itens'):(add+' cadastrados, '+upd+' atualizados'),'ok');
+  const comForn=CATALOG.filter(x=>x.forn).length;
+  toast((replace?('Base substituída: '+add+' itens'):(add+' cadastrados, '+upd+' atualizados'))+' · '+comForn+' com fornecedor','ok');
 }
 function cancelImport(){imp=null;$('#mapcard').style.display='none';$('#map-cols').style.display='';}
 
