@@ -295,6 +295,8 @@
           <input class="t" id="filter" placeholder="Filtrar…" style="padding:7px 10px;font-size:13px;width:160px" oninput="renderCount()">
           <button class="btn sm pri" id="btn-export" onclick="exportXlsx()" disabled>Gerar Excel</button>
           <button class="btn sm" id="btn-txt" onclick="exportTxt()" disabled>Gerar TXT</button>
+          <button class="btn sm" onclick="document.getElementById('juntar-file').click()" title="Some as contagens de vários computadores (arquivos .txt)">Juntar contagens</button>
+          <input type="file" id="juntar-file" accept=".txt,.csv" multiple onchange="onJuntarContagem(event)">
           <button class="btn sm" onclick="newSession()">Nova contagem</button>
         </div>
       </div>
@@ -1154,6 +1156,35 @@ function exportXlsx(){
 function buildTxt(C,O){const out=[];O.forEach(k=>{const c=C[k];const code=c.ean||c.cod||c.code;for(let i=0;i<c.qty;i++)out.push(code);});return out.join('\r\n');}
 function downloadTxt(name,text){const b=new Blob([text],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportTxt(){if(!order.length){toast('Nada para exportar','warn');return;}const lbl=idValue();downloadTxt('inventario_'+(lbl?slug(lbl)+'_':'')+stamp()+'.txt',buildTxt(counts,order));toast('TXT gerado','ok');}
+function onJuntarContagem(ev){
+  const files=[].slice.call(ev.target.files||[]);ev.target.value='';
+  if(!files.length)return;
+  const cur=order.reduce((a,k)=>a+counts[k].qty,0);
+  if(cur>0&&!confirm('Isto SOMA as leituras dos '+files.length+' arquivo(s) à contagem que já está nesta tela ('+fmt(cur)+' un).\n\nSe quiser juntar só os arquivos, clique em "Nova contagem" antes. Continuar?'))return;
+  let texts=[],pending=files.length;
+  const done=()=>{if(--pending<=0)applyJuntar(texts,files.length);};
+  files.forEach(f=>{const r=new FileReader();r.onload=()=>{texts.push(r.result);done();};r.onerror=()=>{toast('Falha ao ler '+f.name,'err');done();};r.readAsText(f);});
+}
+function applyJuntar(texts,nFiles){
+  let units=0,unknownUn=0;const unknownSet={};
+  texts.forEach(txt=>{
+    String(txt).split(/\r?\n/).forEach(line=>{
+      const raw=line.trim();if(!raw||raw.charAt(0)==='#')return;
+      const parts=raw.split(/[\t;,]/);
+      const code=(parts[0]||'').trim();if(!code||/[a-z]/i.test(code)&&!/^\d/.test(code)&&code.length<3)return;
+      let qty=1;if(parts[1]&&/^\d+$/.test(parts[1].trim()))qty=parseInt(parts[1].trim())||1;
+      const p=lookup(code);
+      if(!p){unknownUn+=qty;unknownSet[code]=1;return;}
+      const key='B:'+(p.cod||(p.eans&&p.eans[0])||p.ean||code);
+      if(!counts[key]){counts[key]={key,cod:p.cod||'',ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',qty:0,found:true,code};order.unshift(key);}
+      counts[key].qty+=qty;units+=qty;
+      reads.push({t:Date.now(),code,key,desc:p.desc||'',tam:p.tam||'',found:true});
+    });
+  });
+  persistSession();renderStats();renderCount();
+  const uk=Object.keys(unknownSet).length;
+  toast('Juntadas '+nFiles+' contagem(ns) · '+fmt(units)+' unidades somadas'+(uk?(' · '+uk+' código(s) fora da base ('+fmt(unknownUn)+' un) ignorados'):'')+'. Agora gere o Excel/TXT consolidado.',uk?'warn':'ok');
+}
 function txtFromHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;downloadTxt('inventario_'+slug(s.label)+'_'+stamp()+'.txt',buildTxt(s.counts,s.order));toast('TXT gerado','ok');}
 
 /* ---------- finalizar + histórico ---------- */
