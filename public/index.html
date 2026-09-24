@@ -650,6 +650,7 @@
 /* ---------- storage (servidor) ---------- */
 let TOKEN=null; try{TOKEN=localStorage.getItem('wms_token');}catch(e){}
 let CURRENT_USER=null; try{CURRENT_USER=localStorage.getItem('wms_user');}catch(e){}
+let ROLE='admin';
 function authHeaders(){return {'Authorization':'Bearer '+TOKEN};}
 function onAuthFail(){TOKEN=null;try{localStorage.removeItem('wms_token');}catch(e){}showLogin();}
 const store={
@@ -1636,8 +1637,8 @@ function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click
 function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+'?'))return;DIST.demand[id]={};persistDist();renderDistLojas();renderDist();toast('Pedido removido','ok');}
 
 let distPreview=null;
-function openDistPreview(id,map,raw,ocr){
-  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]})),raw:raw||null,ocr:!!ocr};
+function openDistPreview(id,map,raw,ocr,info){
+  distPreview={id,items:Object.keys(map).map(c=>({cod:c,qtd:map[c]})),raw:raw||null,ocr:!!ocr,info:info||{}};
   let o=document.getElementById('dist-preview');
   if(!o){o=document.createElement('div');o.id='dist-preview';document.body.appendChild(o);}
   renderDistPreview();o.style.display='flex';
@@ -1651,7 +1652,7 @@ function renderDistPreview(){
     '<button class="btn sm gho" onclick="closeDistPreview()">✕</button></div>'+
     (distPreview.ocr?'<div style="background:var(--warn-bg);color:#7a4b00;border-bottom:1px solid #f0dcb4;padding:10px 18px;font-size:12px">⚠ Este PDF é uma <b>imagem escaneada</b> — a leitura automática é imprecisa, principalmente os <b>códigos</b>. O ideal é o PDF original do Microvix (Imprimir → Salvar como PDF). Confira e ajuste os itens antes de confirmar.</div>':'')+
     '<div class="dp-body"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtde</th><th></th></tr></thead><tbody>'+
-    (items.length?items.map((it,i)=>{const p=byCod[it.cod]||{};return '<tr><td class="mono">'+distEscAttr(it.cod)+'</td><td>'+(p.desc?distEscAttr(p.desc):'<span style="color:var(--warn)">não está no cadastro</span>')+'</td><td class="r"><input class="qty-in" type="number" min="0" value="'+(+it.qtd||0)+'" oninput="distPrevSet('+i+',this.value)"></td><td class="r"><button class="btn sm gho dgr" onclick="distPrevDel('+i+')">remover</button></td></tr>';}).join(''):'<tr><td colspan=4 style="text-align:center;color:var(--muted);padding:20px">Nada lido. Adicione os itens manualmente abaixo.</td></tr>')+
+    (items.length?items.map((it,i)=>{const p=byCod[it.cod]||{};const pi=(distPreview.info&&distPreview.info[it.cod])||{};const dsc=p.desc||pi.desc;return '<tr><td class="mono">'+distEscAttr(it.cod)+'</td><td>'+(dsc?distEscAttr(dsc)+(p.desc?'':' <span style="color:var(--warn);font-size:11px">(do pedido)</span>'):'<span style="color:var(--warn)">não está no cadastro</span>')+'</td><td class="r"><input class="qty-in" type="number" min="0" value="'+(+it.qtd||0)+'" oninput="distPrevSet('+i+',this.value)"></td><td class="r"><button class="btn sm gho dgr" onclick="distPrevDel('+i+')">remover</button></td></tr>';}).join(''):'<tr><td colspan=4 style="text-align:center;color:var(--muted);padding:20px">Nada lido. Adicione os itens manualmente abaixo.</td></tr>')+
     '</tbody></table></div>'+
     '<div class="dp-add">+ adicionar item: <input id="dp-cod" placeholder="código" class="qty-in" style="width:120px;text-align:left;font-family:var(--mono)"> <input id="dp-qtd" type="number" min="0" placeholder="qtde" class="qty-in" style="width:80px"> <button class="btn sm" onclick="distPrevAdd()">adicionar</button>'+(distPreview.raw?' <button class="btn sm gho" style="margin-left:auto" onclick="distPrevRaw()">ver texto lido</button>':'')+'</div>'+
     '<div class="dp-ft"><button class="btn" onclick="closeDistPreview()">Cancelar</button><button class="btn pri" onclick="confirmDistPreview()">Confirmar pedido ('+fmt(tot)+' un)</button></div></div>';
@@ -1674,7 +1675,10 @@ function distPrevRaw(){
 async function confirmDistPreview(){
   if(!distPreview)return;const id=distPreview.id;const map={};
   distPreview.items.forEach(it=>{const q=+it.qtd||0;if(it.cod&&q>0)map[it.cod]=(map[it.cod]||0)+q;});
-  DIST.demand[id]=map;await persistDist();
+  DIST.demand[id]=map;
+  if(!DIST.info)DIST.info={};
+  if(distPreview.info)Object.keys(map).forEach(c=>{const pi=distPreview.info[c];if(pi&&(pi.desc||pi.ean)&&!DIST.info[c])DIST.info[c]=pi;});
+  await persistDist();
   const un=Object.values(map).reduce((a,b)=>a+b,0);const st=DIST.stores.find(s=>s.id===id)||{};
   closeDistPreview();renderDistLojas();renderDist();
   toast((st.name||'Loja')+': '+Object.keys(map).length+' itens · '+fmt(un)+' un confirmados','ok');
@@ -1686,15 +1690,15 @@ function onDistFile(ev){
   distOverlay(true,isPdf?'Lendo o PDF… isso pode demorar um pouco.':'Lendo a planilha…');
   const r=new FileReader();
   r.onload=async()=>{
-    let map={},raw=null,ocr=false;
+    let map={},raw=null,ocr=false,info={};
     try{
-      if(isPdf){const o=await readPdfBaixa(r.result);raw=o.lines;ocr=o.ocr;map=parseStorePdf(o.lines);}
-      else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});map=parseStoreSheet(wb);}
+      if(isPdf){const o=await readPdfBaixa(r.result);raw=o.lines;ocr=o.ocr;const res=parseStorePdf(o.lines);map=res.map;info=res.info;}
+      else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const res=parseStoreSheet(wb);map=res.map;info=res.info;}
     }catch(e){toast('Não consegui ler: '+e.message,'err');}
     distBusy=null;distOverlay(false);renderDistLojas();
     const n=Object.keys(map).length;
     if(!n&&!raw){toast('Não encontrei itens nesse arquivo. Confira se é a requisição certa.','warn');return;}
-    openDistPreview(id,map,raw,ocr);
+    openDistPreview(id,map,raw,ocr,info);
   };
   r.onerror=()=>{distBusy=null;distOverlay(false);toast('Erro ao abrir o arquivo','err');renderDistLojas();};
   r.readAsArrayBuffer(f);ev.target.value='';
@@ -1707,10 +1711,13 @@ function parseStoreSheet(wb){
   let iCod=findCol(headers,['codigo','cod.','cod ','produto','item','sku'],['barra','ean','gtin']);
   if(iCod<0)iCod=findCol(headers,['codigo','cod','ean','gtin']);
   let iQt=findCol(headers,['qtde solicitada','quantidade solicitada','qtd solicitada','solicitada','qtde','quantidade','qtd','quant']);
+  const iDesc=findCol(headers,['descricao','descrição','produto','nome']);
+  const iEan=findCol(headers,['barra','ean','gtin','codigo de barras','cód.barras']);
   if(iCod<0||iQt<0)throw new Error('não achei as colunas de código e quantidade');
-  const map={};
-  for(let r=hi+1;r<aoa.length;r++){const row=aoa[r];if(!row)continue;const cod=cleanCode(row[iCod]);const qt=distNum(row[iQt]);if(cod&&qt>0)map[cod]=(map[cod]||0)+qt;}
-  return map;
+  const map={},info={};
+  for(let r=hi+1;r<aoa.length;r++){const row=aoa[r];if(!row)continue;const cod=cleanCode(row[iCod]);const qt=distNum(row[iQt]);if(cod&&qt>0){map[cod]=(map[cod]||0)+qt;
+    const d=iDesc>=0?String(row[iDesc]==null?'':row[iDesc]).trim():'';const e=iEan>=0?cleanCode(row[iEan]):'';if((d||e)&&!info[cod])info[cod]={desc:d,ean:e};}}
+  return {map:map,info:info};
 }
 function parseStorePdf(lines){
   const map={};let cur=null;
@@ -1731,7 +1738,7 @@ function parseStorePdf(lines){
     if(lm){ cur=lm[1]; return; }
     // linha de descrição/continuação -> ignora
   });
-  return map;
+  return {map:map,info:{}};
 }
 
 function distCodes(){const set={};DIST.stores.forEach(s=>{const d=DIST.demand[s.id]||{};Object.keys(d).forEach(c=>{if(d[c]>0)set[c]=1;});});return Object.keys(set).sort();}
@@ -1754,9 +1761,9 @@ function distCompute(){
       raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(r=>{if(rem>0&&r.base<r.pedido){r.base++;rem--;}});
       raw.forEach(r=>{recebe[r.id]=r.base;dist+=r.base;});
     }
-    const p=byCod[cod]||{};
+    const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};
     const atendivel=Math.min(totalPed,available);
-    res[cod]={cod,desc:p.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available)};
+    res[cod]={cod,desc:p.desc||pi.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available),incat:!!byCod[cod]};
     kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;kRes+=reserve;kAtend+=atendivel;
   });
   const set=(id,v)=>{const e=$('#'+id);if(e)e.textContent=fmt(v);};
@@ -1777,7 +1784,8 @@ function renderDistLojas(){
   updateDistSum();
 }
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
-function distEan(cod){const p=byCod[cod]||{};return p.ean||(p.eans&&p.eans[0])||'';}
+function distEan(cod){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};return p.ean||(p.eans&&p.eans[0])||pi.ean||'';}
+function distDescCell(r){const d=r.desc?distEscAttr(r.desc):'';if(!r.incat)return (d||'<span style="color:var(--soft)">—</span>')+' <span class="badge b-warn" title="Código não está no cadastro atual — importe uma base completa. A descrição, quando aparece, veio do pedido da loja.">fora do cadastro</span>';return d||'<span style="color:var(--muted)">(sem descrição)</span>';}
 function distEanCell(cod){const e=distEan(cod);return e?'<span class="mono" style="font-size:11.5px">'+e+'</span>':'<span style="color:var(--soft)">—</span>';}
 function distEffRecebe(res,cod,sid){const o=DIST.over&&DIST.over[cod];if(o&&o[sid]!=null)return o[sid];return res[cod].recebe[sid]||0;}
 function distCellEdit(cod,sid,val){if(!DIST.over)DIST.over={};if(!DIST.edited)DIST.edited={};if(!DIST.over[cod])DIST.over[cod]={};DIST.over[cod][sid]=Math.max(0,parseInt(val)||0);DIST.edited[cod+'|'+sid]=1;persistDist();renderDistE1();}
@@ -1799,7 +1807,7 @@ function renderDistE1(){
     let env=0;DIST.stores.forEach(s=>{env+=distEffRecebe(res,cod,s.id);});const ecol=env>r.disp?'var(--err)':'var(--ink)';
     const cells=cols.map(s=>{const ped=(DIST.demand[s.id]||{})[cod]||0;const got=distEffRecebe(res,cod,s.id);const ed=DIST.edited[cod+'|'+s.id]?' de-edited':'';
       return '<td class="de-cell'+ed+'"><div class="de-stk" title="pediu">'+ped+'</div><input class="de-cin" type="number" min="0" value="'+got+'" onchange="distCellEdit(\''+cod+'\',\''+s.id+'\',this.value)"></td>';}).join('');
-    return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'<td class="r num" title="total enviado às lojas (não pode passar do Disp. CD)"><b style="color:'+ecol+'">'+env+'</b></td></tr>';}).join('');
+    return '<tr><td class="mono">'+cod+'</td><td>'+distEanCell(cod)+'</td><td style="min-width:190px">'+distDescCell(r)+'</td><td>'+distFornCell(cod)+'</td><td>'+distVagaPill(r.vaga)+'</td><td class="r num">'+r.disp+'</td>'+cells+'<td class="r num" title="total enviado às lojas (não pode passar do Disp. CD)"><b style="color:'+ecol+'">'+env+'</b></td></tr>';}).join('');
   body.innerHTML=head+rows+'</tbody></table><div class="bd" style="border-top:1px solid var(--line2);font-size:11.5px;color:var(--soft)">O nº pequeno em cinza é o que a loja pediu. Edite a quantidade a enviar direto na célula (fica amarela).</div>';
 }
 function distStoreCov(cod){const s=leStores({cod:cod,ean:distEan(cod)});const by={};let tot=0;DIST.stores.forEach(st=>{const q=(s&&s[st.id])||0;if(q){by[st.id]=q;tot+=q;}});return {tot:tot,by:by};}
@@ -1808,7 +1816,7 @@ function renderDistE2(){
   const res=distCompute();const body=$('#dist-e2-body');if(!body)return;
   const rows=distCodes().map(c=>res[c]).filter(r=>r.comprar>0).sort((a,b)=>b.comprar-a.comprar);
   body.innerHTML='<table><thead><tr><th>Cód.</th><th>Cód. barras</th><th>Descrição</th><th>Fornecedor</th><th class="r">Pedido</th><th class="r">Tem no CD</th><th class="r">Comprar</th><th class="r">Nas lojas</th></tr></thead><tbody>'+
-    (rows.length?rows.map(r=>{const cov=distStoreCov(r.cod);const covCell=cov.tot>0?'<span class="badge b-ok" title="'+distEscAttr(distCovText(cov))+'">'+cov.tot+'</span>':'<span style="color:var(--soft)">—</span>';return '<tr><td class="mono">'+r.cod+'</td><td>'+distEanCell(r.cod)+'</td><td>'+(r.desc||'(sem descrição)')+'</td><td>'+distFornCell(r.cod)+'</td><td class="r num">'+r.totalPed+'</td><td class="r num" style="color:var(--muted)">'+r.atendivel+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td><td class="r">'+covCell+'</td></tr>';}).join(''):'<tr><td colspan=8 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
+    (rows.length?rows.map(r=>{const cov=distStoreCov(r.cod);const covCell=cov.tot>0?'<span class="badge b-ok" title="'+distEscAttr(distCovText(cov))+'">'+cov.tot+'</span>':'<span style="color:var(--soft)">—</span>';return '<tr><td class="mono">'+r.cod+'</td><td>'+distEanCell(r.cod)+'</td><td>'+distDescCell(r)+'</td><td>'+distFornCell(r.cod)+'</td><td class="r num">'+r.totalPed+'</td><td class="r num" style="color:var(--muted)">'+r.atendivel+'</td><td class="r"><span class="badge b-warn">'+r.comprar+'</span></td><td class="r">'+covCell+'</td></tr>';}).join(''):'<tr><td colspan=8 style="text-align:center;color:var(--muted);padding:24px">O CD atende todos os pedidos — nada a comprar.</td></tr>')+
     '</tbody></table><div class="bd" style="border-top:1px solid var(--line2);display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)"><span>“Nas lojas” = soma do estoque nas lojas (passe o mouse para ver onde). Se tiver, dá para transferir em vez de comprar.</span><span>Total a comprar: <b style="color:var(--warn);font-family:var(--mono)">'+fmt(rows.reduce((a,r)=>a+r.comprar,0))+'</b> un</span></div>';
 }
 function distEtapa(n){distStep=n;const e1=$('#dist-e1'),e2=$('#dist-e2');if(e1)e1.style.display=n===1?'':'none';if(e2)e2.style.display=n===2?'':'none';const s1=$('#dst-1'),s2=$('#dst-2');if(s1)s1.classList.toggle('on',n===1);if(s2)s2.classList.toggle('on',n===2);renderDist();}
@@ -2277,19 +2285,30 @@ async function doLogin(){
     const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
     const j=await r.json();
     if(!r.ok){msg.textContent=j.error||'Falha no login';btn.disabled=false;btn.textContent='Entrar';return;}
-    TOKEN=j.token; CURRENT_USER=j.username;
+    TOKEN=j.token; CURRENT_USER=j.username; ROLE=j.role||'admin';
     try{localStorage.setItem('wms_token',TOKEN);localStorage.setItem('wms_user',CURRENT_USER);}catch(e){}
-    showApp(); await startApp();
+    showApp(); await startApp(); if(ROLE==='viewer')applyReadonly();
   }catch(e){msg.textContent='Erro de conexão com o servidor.';}
   btn.disabled=false; btn.textContent='Entrar';
 }
 function logout(){TOKEN=null;CURRENT_USER=null;try{localStorage.removeItem('wms_token');localStorage.removeItem('wms_user');}catch(e){}showLogin();}
 (async function boot(){
   if(TOKEN){
-    try{const r=await fetch('/api/me',{headers:authHeaders()});if(r.ok){showApp();await startApp();return;}}catch(e){}
+    try{const r=await fetch('/api/me',{headers:authHeaders()});if(r.ok){const j=await r.json();ROLE=(j&&j.role)||'admin';showApp();await startApp();if(ROLE==='viewer')applyReadonly();return;}}catch(e){}
   }
   showLogin();
 })();
+function applyReadonly(){
+  document.body.classList.add('readonly');
+  try{store.set=async function(){return false;};store.del=async function(){return false;};}catch(e){}
+  const bad=/\.click\(\)|confirmImport|limparCadastro|finalizeCount|newSession|manualAdd|enSalvar|rdSalvar|distFinalizar|gerarVagas|apagarTodasVagas|distLimparTudo|divEntLimpar|rdLimpar|distClearPedido|distPick|HistDel|DelItem|onVendasFile/;
+  document.querySelectorAll('[onclick]').forEach(el=>{const oc=el.getAttribute('onclick')||'';if(bad.test(oc))el.style.display='none';});
+  document.querySelectorAll('input[type=file]').forEach(el=>{el.style.display='none';});
+  ['nav-contagem','nav-cadastro','nav-entrada','nav-baixa'].forEach(id=>{const n=document.getElementById(id);if(n)n.style.display='none';});
+  const cv=document.getElementById('view-contagem');
+  if(cv&&cv.style.display!=='none')switchTab('estoque');
+  const ub=$('#user-badge');if(ub)ub.innerHTML=(CURRENT_USER||'')+' <span style="background:#fde68a;color:#92400e;padding:1px 7px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px">SOMENTE LEITURA</span>';
+}
 </script>
 </body>
 </html>
