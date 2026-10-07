@@ -197,6 +197,38 @@
   .pctrow .act{width:140px;text-align:right;flex-shrink:0}
   .lk{border:none;background:none;color:var(--brand);cursor:pointer;font-size:11px;padding:0;white-space:nowrap;font-weight:600}
   .lk.dgr{color:var(--err)}
+  .pk-wrap{max-width:760px;margin:0 auto}
+  .pk-prog{height:9px;background:var(--line2);border-radius:6px;overflow:hidden;margin:10px 0}
+  .pk-prog>span{display:block;height:100%;background:var(--brand);transition:width .2s}
+  .pk-card{position:relative;background:#fff;border:1px solid var(--line);border-radius:16px;padding:26px 24px;text-align:center;box-shadow:0 4px 18px rgba(15,39,71,.06);overflow:hidden}
+  .pk-store{display:inline-block;background:var(--brand);color:#fff;font-weight:700;padding:6px 16px;border-radius:20px;font-size:14px;margin-bottom:12px}
+  .pk-vaga{font-family:var(--mono);font-size:68px;font-weight:800;color:var(--brand-d);letter-spacing:1px;line-height:1}
+  .pk-vaga-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+  .pk-desc{font-size:30px;font-weight:800;margin:16px 0 8px;line-height:1.15}
+  .pk-ean{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--ink);background:#f1f5f9;border-radius:10px;padding:8px 14px;display:inline-block;letter-spacing:1px}
+  .pk-cod{font-size:12.5px;color:var(--muted);font-family:var(--mono);margin-top:8px}
+  .pk-meta{font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+  .pk-count{margin:18px 0 4px}
+  .pk-count .big{font-family:var(--mono);font-size:80px;font-weight:800;line-height:1;color:var(--brand-d)}
+  .pk-count .lbl{font-size:13px;color:var(--muted);margin-top:2px}
+  .pk-scan{width:100%;max-width:380px;padding:16px;font-size:22px;text-align:center;font-family:var(--mono);border:2px solid var(--brand);border-radius:12px;outline:none;margin-top:10px}
+  .pk-scan.bad{border-color:var(--err);background:#fff1f2;animation:pkshake .3s}
+  @keyframes pkshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .pk-msg{min-height:20px;font-size:13px;font-weight:600;margin-top:8px}
+  .pk-flash{position:absolute;inset:0;background:var(--ok);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;opacity:0;pointer-events:none;z-index:5}
+  .pk-flash.show{animation:pkflash .5s ease}
+  .pk-flash .chk{font-size:90px;line-height:1}
+  .pk-flash .txt{font-size:22px;font-weight:800}
+  @keyframes pkflash{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+  .pk-actions{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+  .pk-act{display:flex;flex-direction:column;align-items:center;gap:4px;width:88px;padding:12px 6px;border:1.5px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink)}
+  .pk-act:hover{background:#f8fafc;border-color:var(--soft)}
+  .pk-act svg{width:30px;height:30px}
+  .pk-act.red{color:var(--err)}.pk-act.red svg{stroke:var(--err)}
+  .pk-act.blue{color:var(--brand)}.pk-act.blue svg{stroke:var(--brand)}
+  .pk-setup-store{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line2);border-radius:9px;margin:6px 0;cursor:pointer}
+  .pk-setup-store input{width:20px;height:20px}
+  body.readonly #nav-picking{display:none}
   @media(max-width:720px){.pctrow .ped{width:auto}.pctrow .act{width:auto}}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
@@ -244,6 +276,7 @@
     <button class="nav" id="nav-diventrada" onclick="switchTab('diventrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l9 4v6c0 5-3.8 8.5-9 10-5.2-1.5-9-5-9-10V6l9-4zm0 5a3 3 0 00-3 3h2a1 1 0 112 0c0 .6-.4 1-1 1.4-1 .6-1.6 1.3-1.6 2.6h2c0-.5.3-.8 1-1.2A3 3 0 0012 7zm-1 8v2h2v-2h-2z"/></svg></span>Dividir entrada</button>
     <button class="nav" id="nav-rdist" onclick="switchTab('rdist')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v4h-7V3zm0 6h7v4h-7V9zm0 6h7v6h-7v-6zM3 12h7v9H3v-9z"/></svg></span>Distribuir estoque</button>
     <div class="nav-sec">Movimentação</div>
+    <button class="nav" id="nav-picking" onclick="switchTab('picking')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm2 4h14l-1 12H6L5 8zm4 3v6h2v-6H9zm4 0v6h2v-6h-2z"/></svg></span>Picking</button>
     <button class="nav" id="nav-entrada" onclick="switchTab('entrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L11 12.2zM5 19h14v2H5z"/></svg></span>Entrada XML</button>
     <button class="nav" id="nav-baixa" onclick="switchTab('baixa')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M13 21h-2v-9.2L7.4 15.4 6 14l6-6 6 6-1.4 1.4L13 11.8zM5 3h14v2H5z"/></svg></span>Baixa</button>
     <div class="nav-sec">Cadastro</div>
@@ -457,10 +490,14 @@
   <!-- ============== SALVOS ============== -->
   <section id="view-salvos" style="display:none">
     <div class="card">
+      <div class="hd"><h3>Pickings salvos</h3><span class="sub" id="phist-sub"></span></div>
+      <div class="bd" style="padding:0"><div class="tbl-scroll" id="phist-body"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <div class="hd"><h3>Inventários salvos</h3><span class="sub" id="hist-sub"></span></div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="hist-body"></div></div>
     </div>
-    <div class="note">Cada inventário finalizado fica guardado aqui com data e identificação. Você pode <b>gerar o Excel</b> de novo a qualquer momento, <b>reabrir</b> a contagem para ajustar ou <b>excluir</b>. Os dados ficam salvos neste navegador.</div>
+    <div class="note">Os <b>pickings</b> ficam aqui: os <b>em andamento</b> você pode <b>continuar</b> de onde parou; os <b>finalizados</b> guardam o <b>relatório de não entregues</b>. Os inventários finalizados também ficam guardados, com opção de gerar o Excel, reabrir ou excluir.</div>
   </section>
   <!-- ============== DISTRIBUIÇÃO ============== -->
   <section class="view" id="view-distribuicao" style="display:none">
@@ -638,6 +675,11 @@
 
     <div class="note">Escolha os produtos, defina os percentuais e clique em <b>Fazer a divisão</b>. O “estoque a dividir” vem do inventário por loja (CD, ou CD + lojas, conforme o seletor lá em cima). A divisão considera o estoque atual de cada loja, manda mais para quem tem menos, e você pode ajustar célula a célula.</div>
   </section>
+
+  <section class="view" id="view-picking" style="display:none">
+    <div id="pick-body"></div>
+    <div class="note">O picking separa <b>uma loja por vez</b>, seguindo a <b>ordem das vagas</b> (A.1.1, A.1.2…). Mostra um produto por vez; bipe o código de barras <b>uma vez por unidade</b>. Ao completar a quantidade, pula para o próximo. No fim aparece o resumo. (Versão de teste — não altera o saldo, só marca o que foi separado.)</div>
+  </section>
     </div><!--content-->
   </div><!--main-->
 </div><!--shell-->
@@ -708,10 +750,10 @@ function onContagem(){return tab==='contagem';}
 function focusScan(){if(onContagem()&&!locked){const i=$('#scan');if(i)i.focus();}}
 
 /* ---------- tabs ---------- */
-var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque'};
+var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque',picking:'Picking'};
 function switchTab(t){
   tab=t;
-  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist'].forEach(v=>{
+  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist','picking'].forEach(v=>{
     const sec=$('#view-'+v);if(sec)sec.style.display=t===v?'':'none';
     const nv=$('#nav-'+v);if(nv)nv.classList.toggle('on',t===v);
   });
@@ -726,6 +768,7 @@ function switchTab(t){
   else if(t==='distribuicao'){renderDist();}
   else if(t==='diventrada'){renderDivEnt();}
   else if(t==='rdist'){renderRdist();}
+  else if(t==='picking'){renderPick();}
   else focusScan();
 }
 /* ---------- ESTOQUE (saldo do sistema) ---------- */
@@ -1210,7 +1253,18 @@ async function finalizeCount(){
   renderStats();renderCount();renderHistory();
   toast('Inventário salvo: '+label,'ok');focusScan();
 }
+async function renderPickHist(){
+  const body=$('#phist-body');if(!body)return;
+  let idx=[];try{idx=await pickHistList();}catch(e){}
+  const sub=$('#phist-sub');if(sub)sub.textContent=idx.length+' picking(s) salvo(s)';
+  if(!idx.length){body.innerHTML='<div class="empty" style="padding:24px"><div class="big">▦</div>Nenhum picking salvo. Use “Salvar e sair” ou “Finalizar” no Picking.</div>';return;}
+  body.innerHTML='<table><thead><tr><th>Data</th><th>Lojas</th><th>Status</th><th class="r">Itens</th><th class="r">Faltam</th><th></th></tr></thead><tbody>'+
+    idx.map(function(m){const st=m.status==='finalizado'?'<span class="badge b-ok">finalizado</span>':'<span class="badge b-warn">em andamento</span>';
+      const acts=(m.status!=='finalizado'?'<button class="btn sm pri" onclick="pickReopen(\''+m.id+'\')">continuar</button> ':'<button class="btn sm gho" onclick="pickReopen(\''+m.id+'\')">abrir</button> ')+(m.falta?'<button class="btn sm gho" onclick="pickHistReport(\''+m.id+'\')">relatório</button> ':'')+'<button class="btn sm gho dgr" onclick="pickHistDel(\''+m.id+'\')">excluir</button>';
+      return '<tr><td><b>'+pickHistFmt(m.ts)+'</b></td><td style="font-size:12.5px">'+distEscAttr((m.lojas||[]).join(', ')||'—')+'</td><td>'+st+'</td><td class="r num">'+m.done+'/'+m.total+'</td><td class="r num" style="color:'+(m.falta?'var(--warn)':'var(--muted)')+'">'+m.falta+'</td><td class="r" style="white-space:nowrap">'+acts+'</td></tr>';}).join('')+'</tbody></table>';
+}
 function renderHistory(){
+  if(typeof renderPickHist==='function')renderPickHist();
   const body=$('#hist-body');if(!body)return;
   $('#hist-sub').textContent=SAVED.length+' inventário(s) salvo(s)';
   const ts=$('#tab-salvos');if(ts)ts.textContent='Salvos'+(SAVED.length?' ('+SAVED.length+')':'');
@@ -2224,6 +2278,112 @@ async function rdHistReopen(id){
 async function rdHistDel(id){if(!confirm('Excluir esta divisão salva?'))return;try{const idx=((await store.get(K_RDHIST))||[]).filter(m=>m.id!==id);await store.set(K_RDHIST,idx);await store.del('inv_rdhist_'+id);}catch(e){}openRdHist();toast('Removida','ok');}
 async function rdHistExport(id){const data=await store.get('inv_rdhist_'+id);if(!data){toast('Não achei os dados','err');return;}const ds=entDests();const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Enviar']];ds.forEach(d=>{(data.rows||[]).forEach(r=>{const q=(r.a||{})[d.id]||0;if(q>0)aoa.push([d.id==='cd'?'CD':d.name,r.cod,r.ean,r.desc,q]);});});if(aoa.length<2){toast('Nada a exportar','warn');return;}const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:8}];XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_estoque_'+stamp()+'.xlsx');toast('Exportada','ok');}
 
+/* ===== Picking (separação guiada por vaga + leitura) ===== */
+let PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};
+const K_PICK='inv_pick_v1', K_PHIST='inv_phist_idx';
+const PK_IC={back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',skip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8zM19 5v14"/></svg>',miss:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>'};
+async function loadPick(){const d=await store.get(K_PICK);if(d&&d.tasks)PICK=Object.assign({id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0},d);}
+async function persistPick(){await store.set(K_PICK,PICK);}
+let PK_AC;
+function pickBeep(){try{PK_AC=PK_AC||new (window.AudioContext||window.webkitAudioContext)();var o=PK_AC.createOscillator(),g=PK_AC.createGain();o.type='sine';o.frequency.value=880;o.connect(g);g.connect(PK_AC.destination);g.gain.setValueAtTime(.12,PK_AC.currentTime);o.start();o.stop(PK_AC.currentTime+.12);}catch(e){}}
+function pickStoresWithItems(){const res=distCompute();const out=[];DIST.stores.forEach(s=>{let items=0,un=0;distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){items++;un+=q;}});if(items>0)out.push({id:s.id,name:s.name,items:items,un:un});});return out;}
+function pickBuildTasks(storeIds){const res=distCompute();const tasks=[];const stores=DIST.stores.filter(s=>!storeIds||storeIds.indexOf(s.id)>=0);stores.forEach(s=>{const items=[];distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};items.push({sid:s.id,store:s.name,cod:cod,desc:p.desc||pi.desc||'',ean:distEan(cod),vaga:vagaOf(cod)||'',qty:q,picked:0,status:'pending'});}});items.sort((a,b)=>vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~'));for(var i=0;i<items.length;i++)tasks.push(items[i]);});return tasks;}
+function pickFocus(){setTimeout(function(){const i=$('#pk-scan');if(i)i.focus();},45);}
+function pickStart(){const boxes=[].slice.call(document.querySelectorAll('.pk-st-cb:checked')).map(function(b){return b.value;});if(!boxes.length){toast('Selecione ao menos uma loja','warn');return;}const tasks=pickBuildTasks(boxes);if(!tasks.length){toast('Nada para separar','warn');return;}PICK={id:'p'+Date.now(),tasks:tasks,idx:0,started:true,storeIds:boxes,ts:Date.now()};persistPick();renderPick();pickFocus();}
+function pickReset(){if(!confirm('Descartar este picking? O progresso não salvo será perdido.'))return;PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};persistPick();renderPick();}
+function pickCur(){return PICK.tasks[PICK.idx];}
+function pickAdvance(){let n=PICK.idx+1;while(n<PICK.tasks.length&&PICK.tasks[n].status==='done')n++;PICK.idx=n;persistPick();renderPick();pickFocus();}
+function pickMsg(txt,kind){const m=$('#pk-msg');if(m){m.textContent=txt;m.style.color=kind==='err'?'var(--err)':(kind==='ok'?'var(--ok)':'var(--muted)');}}
+function pickFlash(done){const f=$('#pk-flash');if(f){f.querySelector('.txt').textContent=done?'Item completo!':'Confirmado';f.classList.remove('show');void f.offsetWidth;f.classList.add('show');}pickBeep();}
+function pickUpdCount(t){const el=$('#pk-countbig');if(el)el.textContent=(t.qty-(t.picked||0));}
+function pickScan(val){const t=pickCur();if(!t)return;const code=String(val||'').trim();const inp=$('#pk-scan');if(inp)inp.value='';if(!code)return;const p=lookup(code);const ok=(p&&p.cod===t.cod)||code===t.cod||(t.ean&&code===t.ean);
+  if(ok){t.picked=(t.picked||0)+1;const done=t.picked>=t.qty;pickUpdCount(t);pickFlash(done);persistPick();if(done){t.status='done';setTimeout(pickAdvance,520);}else{setTimeout(function(){renderPick();pickMsg('Faltam '+(t.qty-t.picked),'ok');pickFocus();},520);}}
+  else{if(inp){inp.classList.add('bad');setTimeout(function(){inp.classList.remove('bad');},400);}pickMsg('✗ Código errado'+(p&&p.desc?(' — leu: '+p.desc):' — não é este produto'),'err');pickFocus();}}
+function pickManualPlus(){const t=pickCur();if(!t)return;t.picked=(t.picked||0)+1;const done=t.picked>=t.qty;pickUpdCount(t);pickFlash(done);persistPick();if(done){t.status='done';setTimeout(pickAdvance,520);}else{setTimeout(function(){renderPick();pickFocus();},520);}}
+function pickSkip(){const t=pickCur();if(!t)return;if(t.status!=='done')t.status='skip';PICK.idx++;persistPick();renderPick();pickFocus();}
+function pickMissing(){const t=pickCur();if(!t)return;t.status='missing';PICK.idx++;persistPick();renderPick();pickFocus();}
+function pickPrev(){if(PICK.idx>0){PICK.idx--;persistPick();renderPick();pickFocus();}}
+function pickGotoPending(){const n=PICK.tasks.findIndex(function(t){return t.status!=='done';});if(n>=0){PICK.idx=n;persistPick();renderPick();pickFocus();}}
+async function pickSaveHist(status){
+  if(!PICK.tasks.length)return;
+  const done=PICK.tasks.filter(t=>t.status==='done').length;const falta=PICK.tasks.filter(t=>t.status!=='done').length;
+  const lojas=[];PICK.tasks.forEach(t=>{if(lojas.indexOf(t.store)<0)lojas.push(t.store);});
+  const id=PICK.id||('p'+Date.now());PICK.id=id;
+  const meta={id:id,ts:PICK.ts||Date.now(),status:status,lojas:lojas,total:PICK.tasks.length,done:done,falta:falta};
+  try{await store.set('inv_phist_'+id,{meta:meta,tasks:PICK.tasks,idx:PICK.idx,storeIds:PICK.storeIds});
+    let idx=(await store.get(K_PHIST))||[];idx=idx.filter(m=>m.id!==id);idx.unshift(meta);if(idx.length>80)idx.length=80;await store.set(K_PHIST,idx);}catch(e){toast('Não consegui salvar: '+e.message,'err');}
+}
+async function pickSalvarSair(){await pickSaveHist('andamento');PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};await persistPick();renderPick();toast('Picking salvo — veja em “Salvos” para continuar','ok');}
+async function pickFinalizar(){
+  const pend=PICK.tasks.filter(t=>t.status!=='done');
+  if(!confirm(pend.length?('Finalizar o picking mesmo com '+pend.length+' item(ns) faltante(s)? Eles entram no relatório de não entregues.'):'Finalizar o picking?'))return;
+  await pickSaveHist('finalizado');
+  PICK.idx=PICK.tasks.length;await persistPick();renderPick();
+}
+function pickPendentesDe(tasks){return tasks.filter(t=>t.status!=='done').slice().sort(function(a,b){if(a.sid!==b.sid)return 0;return vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~');});}
+function pickRelatorio(tasks,titulo){
+  const pend=pickPendentesDe(tasks);if(!pend.length){toast('Nenhum item faltante — tudo entregue','ok');return;}
+  const aoa=[['Loja','Vaga','Cod. Produto','Cod. Barras','Produto','Pedido','Separado','Falta','Situacao']];
+  pend.forEach(t=>aoa.push([t.store,t.vaga||'',t.cod,t.ean||'',t.desc||'',t.qty,(t.picked||0),(t.qty-(t.picked||0)),t.status==='missing'?'Nao achado':'Nao separado']));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:10},{wch:14},{wch:15},{wch:42},{wch:8},{wch:9},{wch:7},{wch:14}];XLSX.utils.book_append_sheet(wb,ws,'Nao entregues');XLSX.writeFile(wb,'itens_nao_entregues_'+stamp()+'.xlsx');toast('Relatório gerado','ok');
+}
+function renderPick(){
+  const host=$('#pick-body');if(!host)return;
+  if(!PICK.started){
+    if(!distCodes().length){host.innerHTML='<div class="empty"><div class="big">▦</div>Monte as cargas na aba Distribuição primeiro.</div>';return;}
+    const sts=pickStoresWithItems();
+    if(!sts.length){host.innerHTML='<div class="empty"><div class="big">▦</div>Nenhuma carga com itens para separar.</div>';return;}
+    host.innerHTML='<div class="pk-wrap"><div class="card"><div class="hd"><h3>Iniciar picking</h3><span class="sub">escolha as lojas a separar — a ordem segue as vagas. Os salvos ficam na aba “Salvos”.</span></div><div class="bd">'+
+      sts.map(function(s){return '<label class="pk-setup-store"><input type="checkbox" class="pk-st-cb" value="'+s.id+'" checked><div style="flex:1"><b>'+distEscAttr(s.name)+'</b></div><span class="pk-cod">'+s.items+' itens · '+fmt(s.un)+' un</span></label>';}).join('')+
+      '<div style="margin-top:14px;text-align:center"><button class="btn pri" onclick="pickStart()">Iniciar picking ▶</button></div></div></div></div>';
+    return;
+  }
+  const total=PICK.tasks.length;
+  if(PICK.idx>=total){return pickRenderResumo(host);}
+  const t=pickCur();const pct=Math.round(PICK.idx/total*100);const falta=t.qty-(t.picked||0);
+  host.innerHTML='<div class="pk-wrap">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted)"><span>Item <b style="color:var(--ink)">'+(PICK.idx+1)+'</b> de '+total+'</span><span style="display:flex;gap:8px"><button class="btn sm gho" onclick="pickSalvarSair()">Salvar e sair</button><button class="btn sm pri" onclick="pickFinalizar()">Finalizar</button><button class="btn sm gho dgr" onclick="pickReset()">Descartar</button></span></div>'+
+    '<div class="pk-prog"><span style="width:'+pct+'%"></span></div>'+
+    '<div class="pk-card">'+
+      '<div class="pk-flash" id="pk-flash"><div class="chk">✓</div><div class="txt">Confirmado</div></div>'+
+      '<div class="pk-store">'+distEscAttr(t.store)+'</div>'+
+      '<div class="pk-vaga-lbl">Vaga</div><div class="pk-vaga">'+(t.vaga||'—')+'</div>'+
+      '<div class="pk-desc">'+(t.desc?distEscAttr(t.desc):'(sem descrição)')+'</div>'+
+      '<div class="pk-ean">'+(t.ean||'sem código de barras')+'</div>'+
+      '<div class="pk-cod">cód '+t.cod+'</div>'+
+      '<div class="pk-count"><div class="big" id="pk-countbig">'+falta+'</div><div class="lbl">'+(t.qty>1?'unidades a separar (bipe uma a uma)':'unidade a separar')+'</div></div>'+
+      '<input class="pk-scan" id="pk-scan" placeholder="bipe o código de barras" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();pickScan(this.value);}">'+
+      '<div class="pk-msg" id="pk-msg"></div>'+
+      '<div class="pk-actions">'+
+        '<div class="pk-act" onclick="pickPrev()">'+PK_IC.back+'Voltar</div>'+
+        '<div class="pk-act blue" onclick="pickManualPlus()">'+PK_IC.plus+'+1 manual</div>'+
+        '<div class="pk-act" onclick="pickSkip()">'+PK_IC.skip+'Pular</div>'+
+        '<div class="pk-act red" onclick="pickMissing()">'+PK_IC.miss+'Não achei</div>'+
+      '</div>'+
+    '</div></div>';
+  pickFocus();
+}
+function pickRenderResumo(host){
+  const by={};PICK.tasks.forEach(function(t){const g=by[t.sid]=by[t.sid]||{name:t.store,ok:0,miss:0,skip:0,un:0,need:0};g.need+=t.qty;g.un+=(t.picked||0);if(t.status==='done')g.ok++;else if(t.status==='missing')g.miss++;else g.skip++;});
+  const okN=PICK.tasks.filter(function(t){return t.status==='done';}).length;
+  const pend=PICK.tasks.filter(function(t){return t.status!=='done';});
+  const rows=Object.keys(by).map(function(id){const g=by[id];return '<tr><td>'+distEscAttr(g.name)+'</td><td class="r num">'+g.ok+'</td><td class="r num" style="color:'+(g.miss?'var(--err)':'var(--muted)')+'">'+g.miss+'</td><td class="r num">'+g.skip+'</td><td class="r num">'+fmt(g.un)+'/'+fmt(g.need)+'</td></tr>';}).join('');
+  const pr=pend.slice().sort(function(a,b){if(a.sid!==b.sid)return 0;return vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~');}).map(function(t){const f=t.qty-(t.picked||0);const tag=t.status==='missing'?'<span style="color:var(--err);font-weight:700">não achei</span>':'<span style="color:var(--warn);font-weight:700">não separado</span>';return '<tr><td class="num" style="font-weight:700;color:var(--brand-d)">'+(t.vaga||'—')+'</td><td>'+distEscAttr(t.desc||'')+'<div class="pk-cod">cód '+t.cod+(t.ean?' · '+t.ean:'')+'</div></td><td>'+distEscAttr(t.store)+'</td><td class="r num">'+f+'/'+t.qty+'</td><td class="r">'+tag+'</td></tr>';}).join('');
+  host.innerHTML='<div class="pk-wrap"><div class="pk-card" style="text-align:left">'+
+    '<div style="text-align:center"><div class="pk-vaga" style="font-size:38px;color:'+(pend.length?'var(--warn)':'var(--ok)')+'">'+(pend.length?'Picking incompleto':'Tudo separado ✓')+'</div>'+
+    '<div class="pk-cod" style="margin-top:6px">'+okN+' de '+PICK.tasks.length+' itens completos</div></div>'+
+    '<table style="margin-top:16px"><thead><tr><th>Loja</th><th class="r">OK</th><th class="r">Faltou</th><th class="r">Pulou</th><th class="r">Un.</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    (pend.length?('<div style="margin-top:20px;font-size:14px;font-weight:800;color:var(--warn)">⚠ Itens que faltaram ('+pend.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:6px">na ordem das vagas</div><table><thead><tr><th>Vaga</th><th>Produto</th><th>Loja</th><th class="r">Falta</th><th class="r">Situação</th></tr></thead><tbody>'+pr+'</tbody></table>'):'<div style="margin-top:14px;text-align:center;color:var(--ok);font-weight:700">Nenhum item ficou pendente — tudo bipado!</div>')+
+    '<div class="pk-actions" style="margin-top:18px;justify-content:flex-start">'+(pend.length?'<button class="btn pri" onclick="pickRelatorio(PICK.tasks)">Relatório de não entregues (Excel)</button><button class="btn gho" onclick="pickGotoPending()">Voltar e concluir</button>':'')+'<button class="btn sm gho dgr" onclick="pickReset()">Novo picking</button></div>'+
+    '</div></div>';
+}
+/* salvos de picking na aba Salvos */
+async function pickHistList(){return (await store.get(K_PHIST))||[];}
+async function pickReopen(id){const d=await store.get('inv_phist_'+id);if(!d){toast('Não achei os dados','err');return;}PICK={id:id,tasks:d.tasks||[],idx:d.idx||0,started:true,storeIds:d.storeIds||null,ts:(d.meta&&d.meta.ts)||Date.now()};if(PICK.idx>=PICK.tasks.length)PICK.idx=PICK.tasks.findIndex(t=>t.status!=='done');if(PICK.idx<0)PICK.idx=PICK.tasks.length;await persistPick();switchTab('picking');renderPick();pickFocus();}
+async function pickHistReport(id){const d=await store.get('inv_phist_'+id);if(!d){toast('Não achei os dados','err');return;}pickRelatorio(d.tasks||[]);}
+async function pickHistDel(id){if(!confirm('Excluir este picking salvo?'))return;try{let idx=((await store.get(K_PHIST))||[]).filter(m=>m.id!==id);await store.set(K_PHIST,idx);await store.del('inv_phist_'+id);}catch(e){}renderHistory();toast('Removido','ok');}
+function pickHistFmt(ts){try{const d=new Date(ts);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+
 let APP_STARTED=false;
 async function startApp(){
   if(APP_STARTED)return; APP_STARTED=true;
@@ -2237,7 +2397,7 @@ async function startApp(){
   $('#cat-status').textContent='Cadastro: '+fmt(CATALOG.length)+' itens';
   const sess=await store.get(K_SESS);if(sess){counts=sess.counts||{};order=sess.order||[];reads=sess.reads||[];blocked=sess.blocked||0;if(sess.invId&&$('#inv-id'))$('#inv-id').value=sess.invId;}
   const hist=await store.get(K_HIST);if(hist&&Array.isArray(hist))SAVED=hist;
-  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();await loadRdist();
+  await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();await loadRdist();await loadPick();
   renderStats();renderCount();renderCatalog();renderHistory();renderVagasRegistry();updateVagaDatalist();
   const invId=$('#inv-id');if(invId)invId.addEventListener('input',persistSession);
   const vc=$('#v-code');if(vc){vc.addEventListener('input',()=>{const p=lookup(vc.value.trim());if(p){const v=vagaOf(p.cod);$('#v-found').innerHTML='→ <b>'+p.desc+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo atual <b>'+fmt(saldoOf(p.cod))+'</b>'+(v?' · já na vaga <b>'+v+'</b>':' · sem vaga');}else $('#v-found').textContent=vc.value.trim()?'produto não encontrado na base':'';});
