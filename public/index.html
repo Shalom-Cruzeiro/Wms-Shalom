@@ -229,6 +229,15 @@
   .pk-setup-store{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line2);border-radius:9px;margin:6px 0;cursor:pointer}
   .pk-setup-store input{width:20px;height:20px}
   body.readonly #nav-picking{display:none}
+  .vf-prod{font-size:16px}
+  .vf-prod b{font-size:18px}
+  .vf-box{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:12px;padding:18px 20px;border-radius:14px}
+  .vf-box.ok{background:#e8f7ee;border:1px solid #c7ebd5}
+  .vf-box.sug{background:#eef5ff;border:1px solid #d8e6fb}
+  .vf-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+  .vf-vaga{font-family:var(--mono);font-size:56px;font-weight:800;color:var(--brand-d);line-height:.95}
+  .vf-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  #v-code,#v-vaga{font-size:18px;padding:12px}
   @media(max-width:720px){.pctrow .ped{width:auto}.pctrow .act{width:auto}}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
@@ -441,40 +450,17 @@
   <!-- ============== ALMOXARIFADO / VAGAS ============== -->
   <section id="view-vagas" style="display:none">
     <div class="card">
-      <div class="hd"><h3>Vagas cadastradas</h3><span class="sub" id="vreg-sub"></span></div>
+      <div class="hd"><h3>Endereçar produto</h3><span class="sub">bipe o produto novo — o sistema sugere a vaga do fornecedor mais vazia</span></div>
       <div class="bd">
-        <div class="form-row">
-          <div class="fld"><label>Adicionar vaga(s)</label><input class="t mono" id="vreg-input" placeholder="Ex.: A-01-02   (várias de uma vez: A-01, A-02, A-03)"></div>
-          <button class="btn" onclick="addVaga()">Adicionar</button>
+        <div class="form-row" style="align-items:flex-end">
+          <div class="fld" style="flex:2"><label>Produto (bipe ou digite o código)</label><input class="t mono" id="v-code" placeholder="Cód. de barras ou do produto"></div>
+          <div class="fld" style="flex:none;width:170px"><label>Vaga</label><input class="t mono" id="v-vaga" list="vagas-datalist" placeholder="vaga"></div>
+          <button class="btn pri" style="font-size:15px;padding:12px 22px" onclick="alocar()">Endereçar</button>
         </div>
-        <div id="vreg-list" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div id="v-found" style="margin-top:10px;color:var(--muted);font-size:13px">Bipe um produto para ver a descrição, o saldo e a vaga.</div>
       </div>
     </div>
-    <div class="card">
-      <div class="hd"><h3>Gerar vagas em massa</h3><span class="sub">cria todas de uma vez — ex.: corredores A–E, blocos 1–4, níveis 1–4 = 80 vagas (A-1.1 … E-4.4)</span></div>
-      <div class="bd">
-        <div class="form-row">
-          <div class="fld"><label>Corredores</label><input class="t mono" id="gv-corr" value="A-E" oninput="gvPreview()" placeholder="A-E  ou  A,B,C"></div>
-          <div class="fld" style="flex:none;width:190px"><label>Blocos no total (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-b1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-b2" type="number" min="1" value="20" oninput="gvPreview()"></div></div>
-          <div class="fld" style="flex:none;width:170px"><label>Níveis (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-n1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-n2" type="number" min="1" value="4" oninput="gvPreview()"></div></div>
-          <button class="btn pri" onclick="gerarVagas()">Gerar</button>
-        </div>
-        <div id="gv-preview" style="margin-top:10px;color:var(--muted);font-size:12.5px"></div>
-        <div style="margin-top:12px;border-top:1px solid var(--line2);padding-top:10px"><button class="btn sm gho dgr" onclick="apagarTodasVagas()">Apagar todas as vagas</button></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="hd"><h3>Endereçar produto</h3><span class="sub">bipe o produto e escolha a vaga — a quantidade vem do saldo atual</span></div>
-      <div class="bd">
-        <div class="form-row">
-          <div class="fld"><label>Produto (bipe ou digite o código)</label><input class="t mono" id="v-code" placeholder="Cód. de barras ou do produto"></div>
-          <div class="fld"><label>Vaga (escolha uma cadastrada)</label><input class="t mono" id="v-vaga" list="vagas-datalist" placeholder="Selecione ou bipe a vaga"></div>
-          <button class="btn pri" onclick="alocar()">Endereçar</button>
-        </div>
-        <div id="v-found" style="margin-top:8px;color:var(--muted);font-size:13px">Bipe um produto para ver a descrição, o saldo atual e a vaga.</div>
-      </div>
-    </div>
-    <div class="card">
+    <div class="card" style="margin-top:16px">
       <div class="hd"><h3>Mapa do almoxarifado</h3><span class="sub" id="vagas-sub"></span>
         <div class="right">
           <input class="t" id="vagas-filter" placeholder="Filtrar por vaga, código ou descrição…" style="padding:7px 10px;font-size:13px;width:220px" oninput="renderVagas()">
@@ -482,6 +468,27 @@
         </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="vagas-body"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><h3>Criar vagas</h3><span class="sub" id="vreg-sub">adicione uma a uma ou gere em massa</span></div>
+      <div class="bd">
+        <div class="form-row">
+          <div class="fld"><label>Adicionar vaga(s)</label><input class="t mono" id="vreg-input" placeholder="Ex.: A-01-02   (várias de uma vez: A-01, A-02, A-03)"></div>
+          <button class="btn" onclick="addVaga()">Adicionar</button>
+        </div>
+        <div id="vreg-list" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div style="margin-top:16px;border-top:1px solid var(--line2);padding-top:14px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px">Gerar vagas em massa</div>
+          <div class="form-row">
+            <div class="fld"><label>Corredores</label><input class="t mono" id="gv-corr" value="A-E" oninput="gvPreview()" placeholder="A-E  ou  A,B,C"></div>
+            <div class="fld" style="flex:none;width:190px"><label>Blocos no total (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-b1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-b2" type="number" min="1" value="20" oninput="gvPreview()"></div></div>
+            <div class="fld" style="flex:none;width:170px"><label>Níveis (de / até)</label><div style="display:flex;gap:6px"><input class="t mono" id="gv-n1" type="number" min="1" value="1" oninput="gvPreview()"><input class="t mono" id="gv-n2" type="number" min="1" value="4" oninput="gvPreview()"></div></div>
+            <button class="btn pri" onclick="gerarVagas()">Gerar</button>
+          </div>
+          <div id="gv-preview" style="margin-top:10px;color:var(--muted);font-size:12.5px"></div>
+          <div style="margin-top:12px"><button class="btn sm gho dgr" onclick="apagarTodasVagas()">Apagar todas as vagas</button></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1572,18 +1579,19 @@ function alocar(){
 function vShowFound(p){
   const el=$('#v-found');if(!el)return;
   const v=vagaOf(p.cod);
-  let html='→ <b>'+distEscAttr(p.desc||'')+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo <b>'+fmt(saldoOf(p.cod))+'</b> · Fornecedor: <b>'+distEscAttr(p.forn||'—')+'</b>';
-  if(v){html+='<div style="margin-top:6px;color:var(--ok)">Já endereçado na vaga <b>'+v+'</b></div>';el.innerHTML=html;return;}
+  let html='<div class="vf-prod">→ <b>'+distEscAttr(p.desc||'')+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo <b>'+fmt(saldoOf(p.cod))+'</b> · Fornecedor: <b>'+distEscAttr(p.forn||'—')+'</b></div>';
+  if(v){
+    html+='<div class="vf-box ok"><div><div class="vf-lbl" style="color:#0f6e56">Já endereçado</div><div class="vf-vaga" style="color:#0f6e56">'+v+'</div></div><div style="font-size:13px;color:#0f6e56">Este produto já está nesta vaga.</div></div>';
+    el.innerHTML=html;return;
+  }
   const s=sugereVaga(p.cod);
   if(s.sugestao){
-    if(s.novo){
-      html+='<div style="margin-top:8px;padding:8px 10px;background:#eef5ff;border-radius:8px">Fornecedor <b>'+distEscAttr(s.forn||'—')+'</b> ainda não tem vaga. Sugestão (vaga vazia): <b class="mono" style="font-size:15px;color:var(--brand-d)">'+s.sugestao+'</b> <button class="btn sm pri" onclick="vUsarSugestao(\''+s.sugestao+'\')">Usar '+s.sugestao+'</button></div>';
-    }else{
-      const chips=s.vagas.slice(0,6).map(x=>'<span class="sb">'+x.vaga+' <b>'+x.prod+'p·'+fmt(x.un)+'un</b></span>').join(' ');
-      html+='<div style="margin-top:8px;padding:8px 10px;background:#eef5ff;border-radius:8px">Fornecedor <b>'+distEscAttr(s.forn||'—')+'</b> já está em: '+chips+'<div style="margin-top:6px">Sugestão (mais vazia): <b class="mono" style="font-size:16px;color:var(--brand-d)">'+s.sugestao+'</b> <button class="btn sm pri" onclick="vUsarSugestao(\''+s.sugestao+'\')">Usar '+s.sugestao+'</button></div></div>';
-    }
-  }else if(!s.forn){html+='<div style="margin-top:8px;color:var(--warn)">Produto sem fornecedor no cadastro — não dá para sugerir por fornecedor. Escolha a vaga manualmente.</div>';}
-  else{html+='<div style="margin-top:8px;color:var(--warn)">Sem vaga vazia disponível. Gere mais vagas ou escolha uma manualmente.</div>';}
+    const chips=(!s.novo&&s.vagas.length)?('<div class="vf-chips">'+s.vagas.slice(0,8).map(x=>'<span class="sb">'+x.vaga+' <b>'+x.prod+'p·'+fmt(x.un)+'un</b></span>').join('')+'</div>'):'';
+    const nota=s.novo?('Fornecedor ainda sem vaga — sugerindo uma <b>vaga vazia</b>'):('Fornecedor <b>'+distEscAttr(s.forn||'—')+'</b> já está nas vagas abaixo — sugerindo a <b>mais vazia</b>');
+    html+='<div class="vf-box sug"><div><div class="vf-lbl">Sugestão de vaga</div><div class="vf-vaga">'+s.sugestao+'</div></div>'+
+      '<div style="flex:1;min-width:200px"><div style="font-size:13px;margin-bottom:8px">'+nota+'</div><button class="btn pri" style="font-size:15px;padding:11px 20px" onclick="vUsarSugestao(\''+s.sugestao+'\')">Usar '+s.sugestao+' →</button>'+chips+'</div></div>';
+  }else if(!s.forn){html+='<div class="vf-box sug" style="background:#fff7ed;border-color:#fed7aa"><div style="color:var(--warn);font-weight:600">Produto sem fornecedor no cadastro — escolha a vaga manualmente.</div></div>';}
+  else{html+='<div class="vf-box sug" style="background:#fff7ed;border-color:#fed7aa"><div style="color:var(--warn);font-weight:600">Sem vaga vazia disponível. Gere mais vagas (abaixo) ou escolha manualmente.</div></div>';}
   el.innerHTML=html;
 }
 function vUsarSugestao(vaga){const vv=$('#v-vaga');if(vv)vv.value=vaga;toast('Vaga '+vaga+' preenchida — confira e clique em Endereçar','ok');const b=$('#v-vaga');if(b)b.focus();}
