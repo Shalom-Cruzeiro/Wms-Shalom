@@ -770,7 +770,7 @@ function saldoOf(cod){return SALDO[String(cod).trim()]||0;}
 function stockList(){return Object.keys(SALDO).map(cod=>{const p=byCod[cod]||{};return {cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:SALDO[cod]};});}
 function fillEstLojaSel(){const sel=$('#est-loja');if(!sel)return;if(sel.options.length)return;sel.innerHTML=entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(d.id==='cd'?'CD — Matriz':d.name)+'</option>').join('')+'<option value="total">Total (todas)</option>';}
 function estScopeList(scope){
-  const items=[];const push=(cod,q)=>{const p=byCod[cod]||{};items.push({cod:cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',tam:p.tam||'',saldo:q});};
+  const items=[];const li=(LOJAEST&&LOJAEST.info)||{};const push=(cod,q)=>{const p=byCod[cod]||{};const fi=li[cod]||{};items.push({cod:cod,ean:(p.eans&&p.eans[0])||p.ean||fi.ean||'',desc:p.desc||fi.desc||'',tam:p.tam||'',saldo:q});};
   const stores=FIXED_STORES.map(a=>a[0]);
   if(scope==='cd'){Object.keys(SALDO).forEach(cod=>{const q=SALDO[cod]||0;if(q>0)push(cod,q);});return items;}
   if(scope==='total'){const seen={};Object.keys(LOJAEST.byCod||{}).forEach(c=>seen[c]=1);Object.keys(SALDO).forEach(c=>seen[c]=1);
@@ -1080,7 +1080,17 @@ function confirmImport(){
   const prev=imp.microvix?imp.processed:impPreview();
   if(!prev.length){toast('Nenhum item válido — confira o arquivo','warn');return;}
   const replace=$('#imp-replace')&&$('#imp-replace').checked;
-  if(replace){if(!confirm('Substituir toda a base atual ('+CATALOG.length+' itens) pela nova ('+prev.length+' itens)?'))return;CATALOG=[];buildIndex();}
+  if(replace){
+    const cur=CATALOG.length,nw=prev.length;
+    if(cur>0&&nw<cur){
+      const perda=cur-nw;
+      if(!confirm('⚠ ATENÇÃO — ISSO VAI REDUZIR O CADASTRO\n\nAtual: '+fmt(cur)+' produtos\nArquivo novo: '+fmt(nw)+' produtos\nVocê vai PERDER '+fmt(perda)+' produtos.\n\nQuase sempre isso é arquivo INCOMPLETO ou errado. Só continue se tiver certeza.\n\nSubstituir mesmo assim?'))return;
+      if(nw<cur*0.7){const resp=prompt('Perda grande ('+fmt(perda)+' produtos). Para confirmar, digite SUBSTITUIR em maiúsculas:');if((resp||'').trim().toUpperCase()!=='SUBSTITUIR'){toast('Cancelado — cadastro mantido','warn');return;}}
+    } else {
+      if(!confirm('Substituir toda a base atual ('+fmt(cur)+' itens) pela nova ('+fmt(nw)+' itens)?'))return;
+    }
+    CATALOG=[];buildIndex();
+  }
   let add=0,upd=0;prev.forEach(p=>{
     const ex=(p.cod&&byCod[p.cod])||(p.ean&&byEan[p.ean]);
     if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.forn)ex.forn=p.forn;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
@@ -1809,9 +1819,9 @@ function distCompute(){
       raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(r=>{if(rem>0&&r.base<r.pedido){r.base++;rem--;}});
       raw.forEach(r=>{recebe[r.id]=r.base;dist+=r.base;});
     }
-    const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};
+    const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);
     const atendivel=Math.min(totalPed,available);
-    res[cod]={cod,desc:p.desc||pi.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available),incat:!!byCod[cod]};
+    res[cod]={cod,desc:p.desc||pi.desc||li.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available),incat:!!byCod[cod]};
     kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;kRes+=reserve;kAtend+=atendivel;
   });
   const set=(id,v)=>{const e=$('#'+id);if(e)e.textContent=fmt(v);};
@@ -1832,7 +1842,7 @@ function renderDistLojas(){
   updateDistSum();
 }
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
-function distEan(cod){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};return p.ean||(p.eans&&p.eans[0])||pi.ean||'';}
+function distEan(cod){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);return p.ean||(p.eans&&p.eans[0])||pi.ean||li.ean||'';}
 function distDescCell(r){const d=r.desc?distEscAttr(r.desc):'';if(!r.incat)return (d||'<span style="color:var(--soft)">—</span>')+' <span class="badge b-warn" title="Código não está no cadastro atual — importe uma base completa. A descrição, quando aparece, veio do pedido da loja.">fora do cadastro</span>';return d||'<span style="color:var(--muted)">(sem descrição)</span>';}
 function distEanCell(cod){const e=distEan(cod);return e?'<span class="mono" style="font-size:11.5px">'+e+'</span>':'<span style="color:var(--soft)">—</span>';}
 function distEffRecebe(res,cod,sid){const o=DIST.over&&DIST.over[cod];if(o&&o[sid]!=null)return o[sid];return res[cod].recebe[sid]||0;}
@@ -1986,6 +1996,7 @@ function entDests(){return [{id:'cd',name:'CD (fica no estoque)'}].concat(FIXED_
 function leN(){return LOJAEST&&LOJAEST.byCod?Object.keys(LOJAEST.byCod).length:0;}
 function leStores(it){return (LOJAEST&&LOJAEST.byCod&&LOJAEST.byCod[it.cod])||(it&&it.ean&&LOJAEST.byEan&&LOJAEST.byEan[it.ean])||{};}
 function leStock(it){const s=leStores(it);const o=Object.assign({},s);delete o.cd;const cd=(typeof SALDO!=='undefined'&&SALDO[it.cod])||0;if(cd)o.cd=cd;return o;}
+function leInfo(cod){return (LOJAEST&&LOJAEST.info&&LOJAEST.info[cod])||{};}
 function rebuildLeEan(){const be={};if(LOJAEST&&LOJAEST.byCod)Object.keys(LOJAEST.byCod).forEach(cod=>{const p=(typeof byCod!=='undefined')?byCod[cod]:null;const ean=p&&((p.eans&&p.eans[0])||p.ean);if(ean)be[ean]=LOJAEST.byCod[cod];});LOJAEST.byEan=be;}
 async function loadLojaEst(){const d=await store.get(K_LOJAEST);if(d&&d.byCod)LOJAEST=d;else if(d&&typeof d==='object')LOJAEST={byCod:d,byEan:{}};else LOJAEST={byCod:{},byEan:{}};}
 async function loadEnt(){const d=await store.get(K_ENT);if(d&&d.items)ENT=Object.assign({docs:[],items:[],pct:{},over:{},edited:{},mode:''},d);}
@@ -1997,11 +2008,12 @@ function parseLojaEstoque(aoa){
   const colMap={};
   for(let rr=hi;rr<=hi+1;rr++){const row=aoa[rr]||[];for(let c=5;c<row.length;c++){const m=String(row[c]==null?'':row[c]).match(/^(\d{1,3})\s*-/);if(m&&ENT_NUM2ID[m[1]]&&colMap[c]==null)colMap[c]=ENT_NUM2ID[m[1]];}}
   if(!Object.keys(colMap).length)return null;
-  const byCod={},byEan={};
+  const byCod={},byEan={},info={};
   for(let i=hi+1;i<aoa.length;i++){const row=aoa[i]||[];const a=String(row[0]==null?'':row[0]).trim();if(!a)continue;const cod=cleanCode(a);if(!cod||!/^\d/.test(cod))continue;
     const o={};Object.keys(colMap).forEach(c=>{const v=row[c];const n=typeof v==='number'?Math.round(v):(parseInt(String(v).replace(/[^\d-]/g,''))||0);if(n)o[colMap[c]]=n;});
-    byCod[cod]=o;const ean=cleanCode(row[2]);if(ean)byEan[ean]=o;}
-  return {byCod,byEan};
+    byCod[cod]=o;const ean=cleanCode(row[2]);if(ean)byEan[ean]=o;
+    const d=String(row[1]==null?'':row[1]).trim();if(d||ean)info[cod]={desc:d,ean:ean};}
+  return {byCod,byEan,info};
 }
 function onLojaEstFile(ev){
   const f=ev.target.files[0];if(!f)return;
@@ -2010,7 +2022,7 @@ function onLojaEstFile(ev){
     if(!parsed||!Object.keys(parsed.byCod).length){toast('Não reconheci o arquivo de estoque','warn');return;}
     const byCod2={};const newSaldo={};let cdCount=0;
     Object.keys(parsed.byCod).forEach(cod=>{const src=parsed.byCod[cod];const o={};Object.keys(src).forEach(k=>{if(k==='cd'){if(src.cd>0){newSaldo[cod]=src.cd;cdCount++;}}else o[k]=src[k];});if(Object.keys(o).length)byCod2[cod]=o;});
-    LOJAEST={byCod:byCod2,byEan:{}};rebuildLeEan();
+    LOJAEST={byCod:byCod2,byEan:{},info:parsed.info||{}};rebuildLeEan();
     SALDO=newSaldo;await persistSaldo();
     const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
     renderDivEnt();if(typeof renderEstoque==='function')renderEstoque();if(typeof renderRdist==='function')renderRdist();if(typeof renderDist==='function')renderDist();if(typeof renderStats==='function')renderStats();if(typeof renderCount==='function'&&typeof onContagem==='function'&&onContagem())renderCount();
@@ -2209,7 +2221,7 @@ async function persistRdist(){await store.set(K_RDIST,RDIST);}
 function rdBaseQty(cod){const s=(LOJAEST.byCod&&LOJAEST.byCod[cod])||{};const cd=(typeof SALDO!=='undefined'&&SALDO[cod])||0;if(RDIST.base==='total'){let t=cd;FIXED_STORES.forEach(a=>t+=(s[a[0]]||0));return t;}return cd;}
 function rdRefreshQty(){RDIST.items.forEach(it=>{it.qtd=rdBaseQty(it.cod);});}
 function fillRdForn(){const sel=$('#rd-forn');if(!sel)return;const cur=sel.value;const set={};CATALOG.forEach(p=>{if(p.forn)set[p.forn]=(set[p.forn]||0)+1;});const forns=Object.keys(set).sort((a,b)=>a.localeCompare(b));sel.innerHTML='<option value="">— escolha um fornecedor —</option>'+forns.map(f=>'<option value="'+f.replace(/"/g,'&quot;')+'">'+distEscAttr(f)+' ('+set[f]+')</option>').join('');if(cur)sel.value=cur;}
-function rdAddItem(p,silent){if(!p)return false;if(RDIST.items.some(x=>x.cod===p.cod))return false;const q=rdBaseQty(p.cod);if(q<=0){if(!silent)toast('Sem estoque para dividir','warn');return false;}RDIST.items.push({cod:p.cod,ean:(p.eans&&p.eans[0])||p.ean||'',desc:p.desc||'',qtd:q});return true;}
+function rdAddItem(p,silent){if(!p)return false;if(RDIST.items.some(x=>x.cod===p.cod))return false;const q=rdBaseQty(p.cod);if(q<=0){if(!silent)toast('Sem estoque para dividir','warn');return false;}const li=leInfo(p.cod);RDIST.items.push({cod:p.cod,ean:(p.eans&&p.eans[0])||p.ean||li.ean||'',desc:p.desc||li.desc||'',qtd:q});return true;}
 function rdAddForn(){const f=($('#rd-forn')||{}).value;if(!f){toast('Escolha um fornecedor','warn');return;}if(!leN()){toast('Importe o estoque por loja primeiro','warn');return;}let add=0;CATALOG.forEach(p=>{if((p.forn||'')===f){if(rdAddItem(p,true))add++;}});if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);persistRdist();renderRdist();toast(add+' item(ns) do fornecedor com estoque adicionados','ok');}
 function rdItemSuggest(){const q=norm(($('#rd-item')||{}).value);const box=$('#rd-suggest');if(!box)return;if(q.length<2){box.innerHTML='';return;}const terms=q.split(/\s+/).filter(Boolean);const res=CATALOG.filter(p=>{const hay=norm((p.desc||'')+' '+((p.eans&&p.eans[0])||p.ean||'')+' '+p.cod+' '+(p.forn||''));return terms.every(t=>hay.includes(t));}).slice(0,8);box.innerHTML=res.length?res.map(p=>'<div class="rd-sg" onclick="rdAddByCod(\''+p.cod+'\')" style="padding:6px 10px;border:1px solid var(--line2);border-radius:8px;margin:3px 0;cursor:pointer;font-size:12.5px"><b>'+p.cod+'</b> · '+(p.desc||'')+' <span style="color:var(--soft)">'+(rdBaseQty(p.cod)||0)+' em estoque</span></div>').join(''):'<div style="color:var(--muted);font-size:12px;padding:4px">nada encontrado</div>';}
 function rdAddByCod(cod){const p=byCod[cod];if(rdAddItem(p)){if(!Object.keys(RDIST.pct).length)entDests().forEach(d=>RDIST.pct[d.id]=0);persistRdist();renderRdist();}const i=$('#rd-item');if(i){i.value='';i.focus();}const s=$('#rd-suggest');if(s)s.innerHTML='';}
@@ -2284,7 +2296,7 @@ async function persistPick(){await store.set(K_PICK,PICK);}
 let PK_AC;
 function pickBeep(){try{PK_AC=PK_AC||new (window.AudioContext||window.webkitAudioContext)();var o=PK_AC.createOscillator(),g=PK_AC.createGain();o.type='sine';o.frequency.value=880;o.connect(g);g.connect(PK_AC.destination);g.gain.setValueAtTime(.12,PK_AC.currentTime);o.start();o.stop(PK_AC.currentTime+.12);}catch(e){}}
 function pickStoresWithItems(){const res=distCompute();const out=[];DIST.stores.forEach(s=>{let items=0,un=0;distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){items++;un+=q;}});if(items>0)out.push({id:s.id,name:s.name,items:items,un:un});});return out;}
-function pickBuildTasks(storeIds){const res=distCompute();const tasks=[];const stores=DIST.stores.filter(s=>!storeIds||storeIds.indexOf(s.id)>=0);stores.forEach(s=>{const items=[];distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};items.push({sid:s.id,store:s.name,cod:cod,desc:p.desc||pi.desc||'',ean:distEan(cod),vaga:vagaOf(cod)||'',qty:q,picked:0,status:'pending'});}});items.sort((a,b)=>vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~'));for(var i=0;i<items.length;i++)tasks.push(items[i]);});return tasks;}
+function pickBuildTasks(storeIds){const res=distCompute();const tasks=[];const stores=DIST.stores.filter(s=>!storeIds||storeIds.indexOf(s.id)>=0);stores.forEach(s=>{const items=[];distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);items.push({sid:s.id,store:s.name,cod:cod,desc:p.desc||pi.desc||li.desc||'',ean:distEan(cod),vaga:vagaOf(cod)||'',qty:q,picked:0,status:'pending'});}});items.sort((a,b)=>vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~'));for(var i=0;i<items.length;i++)tasks.push(items[i]);});return tasks;}
 function pickFocus(){setTimeout(function(){const i=$('#pk-scan');if(i)i.focus();},45);}
 function pickStart(){const boxes=[].slice.call(document.querySelectorAll('.pk-st-cb:checked')).map(function(b){return b.value;});if(!boxes.length){toast('Selecione ao menos uma loja','warn');return;}const tasks=pickBuildTasks(boxes);if(!tasks.length){toast('Nada para separar','warn');return;}PICK={id:'p'+Date.now(),tasks:tasks,idx:0,started:true,storeIds:boxes,ts:Date.now()};persistPick();renderPick();pickFocus();}
 function pickReset(){if(!confirm('Descartar este picking? O progresso não salvo será perdido.'))return;PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};persistPick();renderPick();}
@@ -2385,10 +2397,9 @@ let APP_STARTED=false;
 async function startApp(){
   if(APP_STARTED)return; APP_STARTED=true;
   const cat=await store.get(K_CAT);
-  const bv=await store.get(K_BV);
-  if(bv!==BASE_VERSION && BASE.length){CATALOG=BASE.slice();await store.set(K_CAT,{CATALOG});await store.set(K_BV,BASE_VERSION);}
-  else if(cat&&cat.CATALOG&&cat.CATALOG.length){CATALOG=cat.CATALOG;}
-  else if(BASE.length){CATALOG=BASE.slice();await store.set(K_CAT,{CATALOG});}
+  // Nunca sobrescreve o cadastro importado. A base embutida só serve de semente quando NÃO há cadastro salvo.
+  if(cat&&cat.CATALOG&&cat.CATALOG.length){CATALOG=cat.CATALOG;}
+  else if(BASE.length){CATALOG=BASE.slice();await store.set(K_CAT,{CATALOG});await store.set(K_BV,BASE_VERSION);}
   else{CATALOG=[];}
   buildIndex();
   $('#cat-status').textContent='Cadastro: '+fmt(CATALOG.length)+' itens';
