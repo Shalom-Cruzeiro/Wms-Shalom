@@ -1493,6 +1493,21 @@ async function confirmBaixa(){
 
 /* ---------- ALMOXARIFADO / VAGAS (endereçar; qtd = saldo atual) ---------- */
 function vagaOf(cod){return ALLOC[String(cod).trim()]||'';}
+/* Estatística de ocupação por vaga: nº de produtos e unidades (saldo) */
+function vagaStats(){const st={};Object.keys(ALLOC).forEach(cod=>{const v=ALLOC[cod];if(!v)return;const g=st[v]=st[v]||{prod:0,un:0};g.prod++;g.un+=saldoOf(cod);});return st;}
+/* Sugere a vaga mais vazia onde o fornecedor do produto já está alocado */
+function sugereVaga(cod){
+  const p=byCod[cod]||{};const forn=(p.forn||'').trim();
+  const st=vagaStats();
+  // vagas onde o mesmo fornecedor já está
+  const vagasForn={};
+  if(forn){Object.keys(ALLOC).forEach(c2=>{const v=ALLOC[c2];if(!v)return;const f=((byCod[c2]||{}).forn||'').trim();if(f===forn)vagasForn[v]=true;});}
+  const lista=Object.keys(vagasForn).map(v=>({vaga:v,prod:(st[v]||{}).prod||0,un:(st[v]||{}).un||0})).sort((a,b)=>(a.un-b.un)||(a.prod-b.prod)||vagaCmp(a.vaga,b.vaga));
+  if(lista.length)return {forn:forn,sugestao:lista[0].vaga,vagas:lista,novo:false};
+  // fornecedor ainda não tem vaga: sugere uma vaga TOTALMENTE vazia
+  const vazias=VAGAS.filter(v=>!st[v]).sort(vagaCmp);
+  return {forn:forn,sugestao:vazias[0]||null,vagas:[],novo:true,vaziasTotal:vazias.length};
+}
 function vagaExists(v){return VAGAS.includes(String(v||'').trim().toUpperCase());}
 function updateVagaDatalist(){const dl=$('#vagas-datalist');if(dl)dl.innerHTML=VAGAS.map(v=>`<option value="${v}">`).join('');}
 function addVaga(){
@@ -1554,6 +1569,24 @@ function alocar(){
   $('#v-code').value='';$('#v-vaga').value='';$('#v-found').textContent='';$('#v-code').focus();
   renderVagas();renderVagasRegistry();
 }
+function vShowFound(p){
+  const el=$('#v-found');if(!el)return;
+  const v=vagaOf(p.cod);
+  let html='→ <b>'+distEscAttr(p.desc||'')+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo <b>'+fmt(saldoOf(p.cod))+'</b> · Fornecedor: <b>'+distEscAttr(p.forn||'—')+'</b>';
+  if(v){html+='<div style="margin-top:6px;color:var(--ok)">Já endereçado na vaga <b>'+v+'</b></div>';el.innerHTML=html;return;}
+  const s=sugereVaga(p.cod);
+  if(s.sugestao){
+    if(s.novo){
+      html+='<div style="margin-top:8px;padding:8px 10px;background:#eef5ff;border-radius:8px">Fornecedor <b>'+distEscAttr(s.forn||'—')+'</b> ainda não tem vaga. Sugestão (vaga vazia): <b class="mono" style="font-size:15px;color:var(--brand-d)">'+s.sugestao+'</b> <button class="btn sm pri" onclick="vUsarSugestao(\''+s.sugestao+'\')">Usar '+s.sugestao+'</button></div>';
+    }else{
+      const chips=s.vagas.slice(0,6).map(x=>'<span class="sb">'+x.vaga+' <b>'+x.prod+'p·'+fmt(x.un)+'un</b></span>').join(' ');
+      html+='<div style="margin-top:8px;padding:8px 10px;background:#eef5ff;border-radius:8px">Fornecedor <b>'+distEscAttr(s.forn||'—')+'</b> já está em: '+chips+'<div style="margin-top:6px">Sugestão (mais vazia): <b class="mono" style="font-size:16px;color:var(--brand-d)">'+s.sugestao+'</b> <button class="btn sm pri" onclick="vUsarSugestao(\''+s.sugestao+'\')">Usar '+s.sugestao+'</button></div></div>';
+    }
+  }else if(!s.forn){html+='<div style="margin-top:8px;color:var(--warn)">Produto sem fornecedor no cadastro — não dá para sugerir por fornecedor. Escolha a vaga manualmente.</div>';}
+  else{html+='<div style="margin-top:8px;color:var(--warn)">Sem vaga vazia disponível. Gere mais vagas ou escolha uma manualmente.</div>';}
+  el.innerHTML=html;
+}
+function vUsarSugestao(vaga){const vv=$('#v-vaga');if(vv)vv.value=vaga;toast('Vaga '+vaga+' preenchida — confira e clique em Endereçar','ok');const b=$('#v-vaga');if(b)b.focus();}
 function desalocar(cod){delete ALLOC[cod];persistAlloc();renderVagas();}
 function allocFromXml(cod,vaga){
   vaga=(vaga||'').trim().toUpperCase();if(!vaga)return;
@@ -2408,7 +2441,7 @@ async function startApp(){
   await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();await loadRdist();await loadPick();
   renderStats();renderCount();renderCatalog();renderHistory();renderVagasRegistry();updateVagaDatalist();
   const invId=$('#inv-id');if(invId)invId.addEventListener('input',persistSession);
-  const vc=$('#v-code');if(vc){vc.addEventListener('input',()=>{const p=lookup(vc.value.trim());if(p){const v=vagaOf(p.cod);$('#v-found').innerHTML='→ <b>'+p.desc+'</b>'+(p.tam?' · Tam '+p.tam:'')+' · saldo atual <b>'+fmt(saldoOf(p.cod))+'</b>'+(v?' · já na vaga <b>'+v+'</b>':' · sem vaga');}else $('#v-found').textContent=vc.value.trim()?'produto não encontrado na base':'';});
+  const vc=$('#v-code');if(vc){vc.addEventListener('input',()=>{const p=lookup(vc.value.trim());if(p){vShowFound(p);}else $('#v-found').textContent=vc.value.trim()?'produto não encontrado na base':'';});
     vc.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#v-vaga').focus();}});}
   const vv=$('#v-vaga');if(vv)vv.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();alocar();}});
 
