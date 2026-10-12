@@ -2337,7 +2337,7 @@ async function persistPick(){await store.set(K_PICK,PICK);}
 let PK_AC;
 function pickBeep(){try{PK_AC=PK_AC||new (window.AudioContext||window.webkitAudioContext)();var o=PK_AC.createOscillator(),g=PK_AC.createGain();o.type='sine';o.frequency.value=880;o.connect(g);g.connect(PK_AC.destination);g.gain.setValueAtTime(.12,PK_AC.currentTime);o.start();o.stop(PK_AC.currentTime+.12);}catch(e){}}
 function pickStoresWithItems(){const res=distCompute();const out=[];DIST.stores.forEach(s=>{let items=0,un=0;distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){items++;un+=q;}});if(items>0)out.push({id:s.id,name:s.name,items:items,un:un});});return out;}
-function pickBuildTasks(storeIds){const res=distCompute();const tasks=[];const stores=DIST.stores.filter(s=>!storeIds||storeIds.indexOf(s.id)>=0);stores.forEach(s=>{const items=[];distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);items.push({sid:s.id,store:s.name,cod:cod,desc:p.desc||pi.desc||li.desc||'',ean:distEan(cod),vaga:vagaOf(cod)||'',qty:q,picked:0,status:'pending'});}});items.sort((a,b)=>vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~'));for(var i=0;i<items.length;i++)tasks.push(items[i]);});return tasks;}
+function pickBuildTasks(storeIds){const res=distCompute();const tasks=[];const stores=DIST.stores.filter(s=>!storeIds||storeIds.indexOf(s.id)>=0);stores.forEach(s=>{const items=[];distCodes().forEach(cod=>{const q=distEffRecebe(res,cod,s.id);if(q>0){const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);items.push({sid:s.id,store:s.name,cod:cod,desc:p.desc||pi.desc||li.desc||'',forn:p.forn||'',ean:distEan(cod),vaga:vagaOf(cod)||'',qty:q,picked:0,status:'pending'});}});items.sort((a,b)=>vagaCmp(a.vaga||'~~~~',b.vaga||'~~~~'));for(var i=0;i<items.length;i++)tasks.push(items[i]);});return tasks;}
 function pickFocus(){setTimeout(function(){const i=$('#pk-scan');if(i)i.focus();},45);}
 function pickStart(){const boxes=[].slice.call(document.querySelectorAll('.pk-st-cb:checked')).map(function(b){return b.value;});if(!boxes.length){toast('Selecione ao menos uma loja','warn');return;}const tasks=pickBuildTasks(boxes);if(!tasks.length){toast('Nada para separar','warn');return;}PICK={id:'p'+Date.now(),tasks:tasks,idx:0,started:true,storeIds:boxes,ts:Date.now()};persistPick();renderPick();pickFocus();}
 function pickReset(){if(!confirm('Descartar este picking? O progresso não salvo será perdido.'))return;PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};persistPick();renderPick();}
@@ -2400,7 +2400,7 @@ function renderPick(){
       '<div class="pk-vaga-lbl">Vaga</div><div class="pk-vaga">'+(t.vaga||'—')+'</div>'+
       '<div class="pk-desc">'+(t.desc?distEscAttr(t.desc):'(sem descrição)')+'</div>'+
       '<div class="pk-ean">'+(t.ean||'sem código de barras')+'</div>'+
-      '<div class="pk-cod">cód '+t.cod+'</div>'+
+      '<div class="pk-cod">cód '+t.cod+' · '+distEscAttr(t.forn||((byCod[t.cod]||{}).forn)||'—')+'</div>'+
       '<div class="pk-count"><div class="big" id="pk-countbig">'+falta+'</div><div class="lbl">'+(t.qty>1?'unidades a separar (bipe uma a uma)':'unidade a separar')+'</div></div>'+
       '<input class="pk-scan" id="pk-scan" placeholder="bipe o código de barras" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();pickScan(this.value);}">'+
       '<div class="pk-msg" id="pk-msg"></div>'+
