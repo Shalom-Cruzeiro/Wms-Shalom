@@ -761,7 +761,7 @@ function switchTab(t){
   const pt=$('#pgtitle');if(pt)pt.textContent=TAB_TITLES[t]||'';
   document.body.classList.remove('navopen');
   if(t==='cadastro'){renderCatalog();setTimeout(()=>$('#p-code').focus(),30);}
-  else if(t==='salvos'){renderHistory();}
+  else if(t==='salvos'){refreshHistory();}
   else if(t==='estoque'){renderEstoque();}
   else if(t==='entrada'){renderMov('entrada');}
   else if(t==='baixa'){renderMov('baixa');}
@@ -1249,9 +1249,13 @@ async function finalizeCount(){
   const unidades=order.reduce((a,k)=>a+counts[k].qty,0);
   const snap={id:'INV'+Date.now(),label,date:Date.now(),itens:order.length,unidades,leituras:reads.length,blocked,
     counts:JSON.parse(JSON.stringify(counts)),order:order.slice(),reads:reads.slice()};
-  SAVED.unshift(snap);
-  const ok=await store.set(K_HIST,SAVED);
-  if(!ok){SAVED.shift();toast('Não foi possível salvar (armazenamento cheio). Gere o Excel e libere espaço.','err');return;}
+  // relê a lista atual do servidor e junta (não sobrescreve o que outros computadores salvaram)
+  let serverList=[];try{serverList=await store.get(K_HIST);}catch(e){}
+  if(!Array.isArray(serverList))serverList=SAVED.slice();
+  const merged=[snap].concat(serverList.filter(x=>x&&x.id!==snap.id));
+  const ok=await store.set(K_HIST,merged);
+  if(!ok){toast('Não foi possível salvar (armazenamento cheio). Gere o Excel e libere espaço.','err');return;}
+  SAVED=merged;
   // gera o Excel e o TXT automaticamente
   XLSX.writeFile(buildWorkbook(counts,order,reads),'inventario_'+slug(label)+'_'+stamp()+'.xlsx');
   downloadTxt('inventario_'+slug(label)+'_'+stamp()+'.txt',buildTxt(counts,order));
@@ -1273,6 +1277,11 @@ async function renderPickHist(){
     idx.map(function(m){const st=m.status==='finalizado'?'<span class="badge b-ok">finalizado</span>':'<span class="badge b-warn">em andamento</span>';
       const acts=(m.status!=='finalizado'?'<button class="btn sm pri" onclick="pickReopen(\''+m.id+'\')">continuar</button> ':'<button class="btn sm gho" onclick="pickReopen(\''+m.id+'\')">abrir</button> ')+(m.falta?'<button class="btn sm gho" onclick="pickHistReport(\''+m.id+'\')">relatório</button> ':'')+'<button class="btn sm gho dgr" onclick="pickHistDel(\''+m.id+'\')">excluir</button>';
       return '<tr><td><b>'+pickHistFmt(m.ts)+'</b></td><td style="font-size:12.5px">'+distEscAttr((m.lojas||[]).join(', ')||'—')+'</td><td>'+st+'</td><td class="r num">'+m.done+'/'+m.total+'</td><td class="r num" style="color:'+(m.falta?'var(--warn)':'var(--muted)')+'">'+m.falta+'</td><td class="r" style="white-space:nowrap">'+acts+'</td></tr>';}).join('')+'</tbody></table>';
+}
+async function refreshHistory(){
+  // recarrega a lista do servidor antes de mostrar (pega inventários de outros computadores)
+  try{const hist=await store.get(K_HIST);if(Array.isArray(hist))SAVED=hist;}catch(e){}
+  renderHistory();
 }
 function renderHistory(){
   if(typeof renderPickHist==='function')renderPickHist();
@@ -1302,7 +1311,7 @@ async function reopenHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;
   switchTab('contagem');if($('#inv-id'))$('#inv-id').value=s.label;renderStats();renderCount();
   toast('Contagem reaberta — finalize de novo para salvar as alterações','ok');
 }
-async function delHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;if(!confirm('Excluir o inventário "'+s.label+'"? Não dá para desfazer.'))return;SAVED=SAVED.filter(x=>x.id!==id);await store.set(K_HIST,SAVED);renderHistory();toast('Inventário excluído','ok');}
+async function delHistory(id){let serverList=[];try{serverList=await store.get(K_HIST);}catch(e){}if(!Array.isArray(serverList))serverList=SAVED.slice();const s=serverList.find(x=>x.id===id)||SAVED.find(x=>x.id===id);if(!s)return;if(!confirm('Excluir o inventário "'+s.label+'"? Não dá para desfazer.'))return;const merged=serverList.filter(x=>x&&x.id!==id);await store.set(K_HIST,merged);SAVED=merged;renderHistory();toast('Inventário excluído','ok');}
 
 /* ---------- session ---------- */
 let saveT=null;function persistSession(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(K_SESS,{counts,order,reads,blocked,invId:idValue()}),250);}
