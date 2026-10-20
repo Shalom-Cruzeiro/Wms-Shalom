@@ -750,8 +750,13 @@ async function persistVagas(){await store.set(K_VAGAS,VAGAS);}
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const norm=s=>(s==null?'':String(s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-function normCode(s){s=String(s==null?'':s).trim().replace(/\s+/g,'');var n=s.replace(/^0+/,'');return n||s;}
-function buildIndex(){byEan={};byCod={};byEanN={};byCodN={};CATALOG.forEach(p=>{const es=p.eans||(p.ean?[p.ean]:[]);es.forEach(e=>{if(e){const k=String(e).trim();byEan[k]=p;const n=normCode(k);if(n&&!byEanN[n])byEanN[n]=p;}});if(p.cod){const c=String(p.cod).trim();byCod[c]=p;const cn=normCode(c);if(cn&&!byCodN[cn])byCodN[cn]=p;}});}
+function normCode(s){s=String(s==null?'':s).trim().toUpperCase().replace(/\s+/g,'');var n=s.replace(/^0+/,'');return n||s;}
+function buildIndex(){byEan={};byCod={};byEanN={};byCodN={};
+  // passe 1: códigos de barras reais e código do produto (têm prioridade)
+  CATALOG.forEach(p=>{const es=p.eans||(p.ean?[p.ean]:[]);es.forEach(e=>{if(e){const k=String(e).trim();byEan[k]=p;const n=normCode(k);if(n&&!byEanN[n])byEanN[n]=p;}});if(p.cod){const c=String(p.cod).trim();byCod[c]=p;const cn=normCode(c);if(cn&&!byCodN[cn])byCodN[cn]=p;}});
+  // passe 2: referência como alias de leitura (fornecedores que etiquetam pela referência), só onde não conflita
+  CATALOG.forEach(p=>{if(p.ref){const k=String(p.ref).trim();if(k){if(!byEan[k])byEan[k]=p;const n=normCode(k);if(n&&!byEanN[n]&&!byCodN[n])byEanN[n]=p;}}});
+}
 function lookup(code){code=String(code).trim();if(byEan[code])return byEan[code];if(byCod[code])return byCod[code];const n=normCode(code);return byEanN[n]||byCodN[n]||null;}
 function catId(p){return p.cod||p.ean||(p.eans&&p.eans[0])||'';}
 function findCat(id){id=String(id).trim();if(byCod[id])return byCod[id];if(byEan[id])return byEan[id];const n=normCode(id);return byCodN[n]||byEanN[n]||null;}
@@ -1064,9 +1069,9 @@ function processRegistroInventario(aoa){
   for(let i=0;i<Math.min(aoa.length,40);i++){const r=(aoa[i]||[]).map(norm);if(r[0]==='codigo'&&r.some(c=>c.includes('barras'))){hi=i;hdr=r;break;}}
   if(hi<0)return null;
   // identifica as colunas pelo cabeçalho (não pelo tamanho do número — códigos com zero à esquerda têm <12 dígitos)
-  let iCod=0,iBar=-1,iDesc=-1;
-  for(let c=0;c<hdr.length;c++){const h=hdr[c];if(h==='codigo')iCod=c;if(iBar<0&&h.includes('barras'))iBar=c;if(iDesc<0&&h.includes('descri'))iDesc=c;}
-  if(iBar<0)iBar=2; if(iDesc<0)iDesc=1;
+  let iCod=0,iBar=-1,iDesc=-1,iRef=-1;
+  for(let c=0;c<hdr.length;c++){const h=hdr[c];if(h==='codigo')iCod=c;if(iBar<0&&h.includes('barras'))iBar=c;if(iDesc<0&&h.includes('descri'))iDesc=c;if(iRef<0&&h.includes('referenc'))iRef=c;}
+  if(iBar<0)iBar=2; if(iDesc<0)iDesc=1; if(iRef<0)iRef=3;
   const prods={};const order=[];let forn='';
   for(let i=hi+1;i<aoa.length;i++){
     const row=aoa[i]||[];
@@ -1077,13 +1082,15 @@ function processRegistroInventario(aoa){
     const cod=cleanCode(a);if(!cod||!/^\d/.test(cod))continue;
     const ean=cleanCode(row[iBar]);
     const desc=String(row[iDesc]==null?'':row[iDesc]).trim();
-    if(!(cod in prods)){prods[cod]={cod,desc,eans:[],forn};order.push(cod);}
+    const ref=iRef>=0?String(row[iRef]==null?'':row[iRef]).trim():'';
+    if(!(cod in prods)){prods[cod]={cod,desc,eans:[],forn,ref:''};order.push(cod);}
     const p=prods[cod];
     if(!p.forn&&forn)p.forn=forn;
     if(!p.desc&&desc)p.desc=desc;
+    if(!p.ref&&ref)p.ref=ref;
     if(ean&&!p.eans.includes(ean))p.eans.push(ean);
   }
-  return order.map(cod=>{const p=prods[cod];return {cod:p.cod,ean:(p.eans[0]||''),eans:p.eans,desc:p.desc,tam:extractSize(p.desc),forn:p.forn||''};});
+  return order.map(cod=>{const p=prods[cod];return {cod:p.cod,ean:(p.eans[0]||''),eans:p.eans,desc:p.desc,tam:extractSize(p.desc),forn:p.forn||'',ref:p.ref||''};});
 }
 function guessCol(headers,keywords,exclude){for(const kw of keywords)for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(exclude&&exclude.some(x=>h.includes(x)))continue;if(h.includes(kw))return i;}return -1;}
 function impPreview(){const ie=+$('#m_ean').value,id=+$('#m_desc').value,it=+$('#m_tam').value;
@@ -1115,8 +1122,8 @@ function confirmImport(){
   }
   let add=0,upd=0;prev.forEach(p=>{
     const ex=(p.cod&&byCod[p.cod])||(p.ean&&byEan[p.ean]);
-    if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.forn)ex.forn=p.forn;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
-    else{CATALOG.push({cod:p.cod||'',ean:(p.eans&&p.eans[0])||p.ean||'',eans:p.eans||(p.ean?[p.ean]:[]),desc:p.desc||'',tam:p.tam||'',forn:p.forn||''});add++;}
+    if(ex){ex.desc=p.desc;ex.tam=p.tam;if(p.cod)ex.cod=p.cod;if(p.forn)ex.forn=p.forn;if(p.ref)ex.ref=p.ref;if(p.eans){ex.eans=p.eans;ex.ean=p.eans[0]||ex.ean;}else if(p.ean){ex.eans=ex.eans||[];if(!ex.eans.includes(p.ean))ex.eans.push(p.ean);ex.ean=ex.eans[0];}upd++;}
+    else{CATALOG.push({cod:p.cod||'',ean:(p.eans&&p.eans[0])||p.ean||'',eans:p.eans||(p.ean?[p.ean]:[]),desc:p.desc||'',tam:p.tam||'',forn:p.forn||'',ref:p.ref||''});add++;}
   });
   buildIndex();persistCatalog();renderCatalog();
   if(onContagem())renderCount();
