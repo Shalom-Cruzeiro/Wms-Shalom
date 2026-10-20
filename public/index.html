@@ -1060,20 +1060,23 @@ function processMicrovix(wb){
 /* Lê a exportação "Registro de Inventário" (agrupada por fornecedor) */
 function parseFornName(s){let t=String(s||'').trim();t=t.replace(/^\d+\s*-\s*/,'');t=t.replace(/^\d[\d.\-\/]{6,}\s+/,'');return t.trim()||String(s||'').trim();}
 function processRegistroInventario(aoa){
-  let hi=-1;
-  for(let i=0;i<Math.min(aoa.length,40);i++){const r=(aoa[i]||[]).map(norm);if(r[0]==='codigo'&&r.some(c=>c.includes('barras'))){hi=i;break;}}
+  let hi=-1,hdr=null;
+  for(let i=0;i<Math.min(aoa.length,40);i++){const r=(aoa[i]||[]).map(norm);if(r[0]==='codigo'&&r.some(c=>c.includes('barras'))){hi=i;hdr=r;break;}}
   if(hi<0)return null;
+  // identifica as colunas pelo cabeçalho (não pelo tamanho do número — códigos com zero à esquerda têm <12 dígitos)
+  let iCod=0,iBar=-1,iDesc=-1;
+  for(let c=0;c<hdr.length;c++){const h=hdr[c];if(h==='codigo')iCod=c;if(iBar<0&&h.includes('barras'))iBar=c;if(iDesc<0&&h.includes('descri'))iDesc=c;}
+  if(iBar<0)iBar=2; if(iDesc<0)iDesc=1;
   const prods={};const order=[];let forn='';
   for(let i=hi+1;i<aoa.length;i++){
     const row=aoa[i]||[];
-    const a=String(row[0]==null?'':row[0]).trim();
-    const b=String(row[1]==null?'':row[1]).trim();
-    if(!a&&!b)continue;
-    if(!a){ if(/^\d+\s*-\s*\S/.test(b))forn=parseFornName(b); continue; }
+    const a=String(row[iCod]==null?'':row[iCod]).trim();
+    const g=String(row[1]==null?'':row[1]).trim();
+    if(!a&&!g)continue;
+    if(!a){ if(/^\d+\s*-\s*\S/.test(g))forn=parseFornName(g); continue; }
     const cod=cleanCode(a);if(!cod||!/^\d/.test(cod))continue;
-    let bc=-1;for(let c=2;c<Math.min(row.length,9);c++){const v=String(row[c]==null?'':row[c]).replace(/\D/g,'');if(v.length>=12){bc=c;break;}}
-    let ean='',desc=b;
-    if(bc>=0){ean=cleanCode(row[bc]);const mid=[];for(let c=1;c<bc;c++){const t=String(row[c]==null?'':row[c]).trim();if(t)mid.push(t);}desc=mid.join(' ');}
+    const ean=cleanCode(row[iBar]);
+    const desc=String(row[iDesc]==null?'':row[iDesc]).trim();
     if(!(cod in prods)){prods[cod]={cod,desc,eans:[],forn};order.push(cod);}
     const p=prods[cod];
     if(!p.forn&&forn)p.forn=forn;
