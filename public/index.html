@@ -511,7 +511,11 @@
     </div>
     <div class="card" style="margin-top:16px">
       <div class="hd"><h3>Inventários salvos</h3><span class="sub" id="hist-sub"></span>
-        <div class="right"><button class="btn sm pri" onclick="openConsolidar()">Consolidar / verificar duplicados</button></div>
+        <div class="right">
+          <input type="file" id="imp-inv-file" accept=".xlsx,.xls,.txt" multiple style="display:none" onchange="importSavedInvFiles(event)">
+          <button class="btn sm" onclick="document.getElementById('imp-inv-file').click()">Importar salvos do PC</button>
+          <button class="btn sm pri" onclick="openConsolidar()">Consolidar / verificar duplicados</button>
+        </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="hist-body"></div></div>
     </div>
@@ -1428,6 +1432,66 @@ async function excluirCobertos(){
   const merged=serverList.filter(function(x){return x&&ids.indexOf(x.id)<0;});
   const ok=await store.set(K_HIST,merged);if(!ok){toast('O servidor recusou — tente de novo.','err');return;}
   SAVED=merged;closeConsolidar();renderHistory();toast(ids.length+' coberta(s) removida(s).','ok');
+}
+
+/* ---------- IMPORTAR inventários salvos do PC (Excel/TXT de volta pro sistema) ---------- */
+function parseContagemSheet(wb){
+  let ws=wb.Sheets['Contagem'];
+  if(!ws){for(var n=0;n<wb.SheetNames.length;n++){const w=wb.Sheets[wb.SheetNames[n]];const a0=XLSX.utils.sheet_to_json(w,{header:1});if(a0[0]&&a0[0].map(x=>String(x==null?'':x).toLowerCase()).some(h=>h.indexOf('contado')>=0)){ws=w;break;}}}
+  if(!ws)return null;
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1});if(!aoa.length)return null;
+  const hdr=aoa[0].map(x=>String(x==null?'':x).toLowerCase());
+  const iEan=hdr.findIndex(h=>h.indexOf('barras')>=0);
+  const iCod=hdr.findIndex(h=>h.indexOf('produto')>=0);
+  const iDesc=hdr.findIndex(h=>h.indexOf('descri')>=0);
+  const iTam=hdr.findIndex(h=>h.indexOf('tam')>=0);
+  const iQty=hdr.findIndex(h=>h.indexOf('contado')>=0);
+  if(iQty<0)return null;
+  const counts={},order=[];
+  for(var r=1;r<aoa.length;r++){const row=aoa[r];if(!row||!row.length)continue;
+    const ean=iEan>=0?cleanCode(row[iEan]):'';const cod=iCod>=0?cleanCode(row[iCod]):'';
+    const qty=Math.round(parseFloat(String(row[iQty]==null?'':row[iQty]).replace(',','.'))||0);
+    if(qty<=0)continue;if(!cod&&!ean)continue;
+    const key='B:'+(cod||ean);
+    if(!counts[key]){counts[key]={key,cod:cod||'',ean:ean||'',desc:iDesc>=0?String(row[iDesc]||''):'',tam:iTam>=0?String(row[iTam]||''):'',qty:0,code:ean||cod,found:true};order.push(key);}
+    counts[key].qty+=qty;
+  }
+  return order.length?{counts,order}:null;
+}
+function parseTxtInv(text){
+  const lines=String(text).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length)return null;const qn={};lines.forEach(c=>{qn[c]=(qn[c]||0)+1;});
+  const counts={},order=[];
+  for(const code in qn){const p=lookup(code);const cod=p?(p.cod||''):'';const ean=(p&&((p.eans&&p.eans[0])||p.ean))||code;const key='B:'+(cod||code);
+    if(!counts[key]){counts[key]={key,cod:cod,ean:p?ean:code,desc:p?(p.desc||''):'',tam:p?(p.tam||''):'',qty:0,code,found:!!p};order.push(key);}
+    counts[key].qty+=qn[code];}
+  return order.length?{counts,order}:null;
+}
+async function importSavedInvFiles(ev){
+  const files=Array.prototype.slice.call((ev.target&&ev.target.files)||[]);if(!files.length)return;
+  let added=0,fail=0,stop=false;
+  for(var i=0;i<files.length&&!stop;i++){const f=files[i];
+    try{
+      let parsed=null;
+      if(/\.txt$/i.test(f.name)){parsed=parseTxtInv(await f.text());}
+      else{const buf=await f.arrayBuffer();const wb=XLSX.read(buf,{type:'array'});parsed=parseContagemSheet(wb);}
+      if(!parsed){fail++;continue;}
+      const unid=parsed.order.reduce((a,k)=>a+parsed.counts[k].qty,0);
+      let date=f.lastModified||Date.now();const m=f.name.match(/(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})/);
+      if(m)date=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime();
+      let label=f.name.replace(/\.(xlsx|xls|txt)$/i,'').replace(/^inventario_/i,'').replace(/_\d{4}-\d{2}-\d{2}_\d{4}$/,'').replace(/-/g,' ').trim()||f.name;
+      const id='IMP'+date+'-'+Math.random().toString(36).slice(2,6);
+      const snap={id,label:'[PC] '+label,date,itens:parsed.order.length,unidades:unid,leituras:0,blocked:0,dev:'importado',cont:false,imported:true,counts:parsed.counts,order:parsed.order,reads:[]};
+      const rd=await store.getSafe(K_HIST);if(!rd.ok){toast('Servidor indisponível — parei. '+added+' já importado(s). Tente de novo.','err');stop=true;break;}
+      const serverList=Array.isArray(rd.value)?rd.value:[];
+      const merged=[snap].concat(serverList.filter(x=>x&&x.id!==id));
+      const ok=await store.set(K_HIST,merged);if(!ok){toast('Servidor recusou a gravação — parei.','err');stop=true;break;}
+      SAVED=merged;added++;
+    }catch(e){fail++;}
+  }
+  if(ev.target)ev.target.value='';
+  renderHistory();
+  if(!stop)toast(added+' arquivo(s) importado(s)'+(fail?(' · '+fail+' ignorado(s) (formato não reconhecido)'):'')+'. Agora clique em "Consolidar".','ok');
 }
 
 /* ---------- session ---------- */
