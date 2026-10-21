@@ -703,11 +703,13 @@
         <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:14px">
           <div class="fld" style="flex:1;min-width:230px">
             <label>1) Vendas dos últimos 15 dias (arquivo do Microvix)</label>
+            <button class="btn pri" style="width:100%;justify-content:center" onclick="document.getElementById('cob-vfile').click()">Selecionar arquivo de vendas</button>
             <input type="file" id="cob-vfile" accept=".xls,.xlsx,.html,.htm" onchange="onCobVendas(event)">
             <div id="cob-vinfo" style="margin-top:6px;font-size:12px;color:var(--muted)">Relatório "Produtos/Serviços Vendidos" da loja.</div>
           </div>
           <div class="fld" style="flex:1;min-width:230px">
             <label>2) Pedido da semana (PDF ou planilha)</label>
+            <button class="btn pri" style="width:100%;justify-content:center" onclick="document.getElementById('cob-pfile').click()">Selecionar pedido</button>
             <input type="file" id="cob-pfile" accept=".pdf,.xlsx,.xls,.csv" onchange="onCobPedido(event)">
             <div id="cob-pinfo" style="margin-top:6px;font-size:12px;color:var(--muted)">O mesmo PDF que você usa para distribuir.</div>
           </div>
