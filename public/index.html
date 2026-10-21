@@ -721,7 +721,6 @@
           <div class="fld" style="flex:none;width:130px"><label>Período vendas (dias)</label><input class="t mono" id="cob-days" type="number" min="1" value="15"></div>
           <div class="fld" style="flex:none;width:150px"><label>Cobertura estoque (dias)</label><input class="t mono" id="cob-estq" type="number" min="0" value="15"></div>
           <div class="fld" style="flex:none;width:150px"><label>Tempo de entrega (dias)</label><input class="t mono" id="cob-lead" type="number" min="0" value="7"></div>
-          <div class="fld" style="flex:none;width:130px"><label>Tolerância (%)</label><input class="t mono" id="cob-tol" type="number" min="0" value="20"></div>
           <button class="btn pri" style="padding:12px 22px" onclick="cobAnalisar()">Analisar</button>
         </div>
         <div id="cob-status" style="margin-top:8px;font-size:12.5px;color:var(--muted)"></div>
@@ -2187,20 +2186,23 @@ function cobAnalisar(){
   const store=($('#cob-store')||{}).value||'';if(!store){toast('Selecione a loja','warn');return;}
   const days=Math.max(1,+($('#cob-days')||{}).value||15);
   const estD=Math.max(0,+($('#cob-estq')||{}).value||15),leadD=Math.max(0,+($('#cob-lead')||{}).value||7);
-  const tol=Math.max(0,(+($('#cob-tol')||{}).value||0))/100;const alvoD=estD+leadD;
+  const alvoD=estD+leadD;
   const vendas=COB.vendas||{},pedido=COB.pedido||{};
   const codes={};Object.keys(vendas).forEach(c=>codes[c]=1);Object.keys(pedido).forEach(c=>codes[c]=1);
   const rows=[];
   Object.keys(codes).forEach(cod=>{
     const v=vendas[cod]||0,ped=pedido[cod]||0;if(v<=0&&ped<=0)return;
+    const cdStock=saldoOf(cod);
+    // item que a loja NÃO pediu só entra se o CD-Matriz tiver estoque para enviar
+    if(ped<=0&&cdStock<=0)return;
     const rate=v>0?v/days:0;const demanda=rate*alvoD;const est=cobStockOf(cod,store);const apos=est+ped;
-    const idealPed=Math.max(0,Math.ceil(demanda-est));const covApos=rate>0?apos/rate:(apos>0?Infinity:0);
+    const need=Math.ceil(demanda);const idealPed=Math.max(0,Math.ceil(demanda-est));const covApos=rate>0?apos/rate:(apos>0?Infinity:0);
     let status,delta;
     if(rate<=0){status=ped>0?'semvenda':'ok';delta=ped;}
-    else if(apos>demanda*(1+tol)+1e-6){status='excesso';delta=Math.round(apos-demanda);}
-    else if(apos<demanda*(1-tol)-1e-6){status='falta';delta=Math.round(demanda-apos);}
+    else if(apos<need){status='falta';delta=need-apos;}
+    else if(apos>need){status='excesso';delta=apos-need;}
     else {status='ok';delta=0;}
-    rows.push({cod,desc:cobDesc(cod),v,rate,est,ped,apos,demanda,idealPed,covApos,status,delta});
+    rows.push({cod,desc:cobDesc(cod),v,rate,est,ped,cd:cdStock,apos,demanda,idealPed,covApos,status,delta});
   });
   const ordS={falta:0,semvenda:1,excesso:2,ok:3};
   rows.sort((a,b)=>{if(ordS[a.status]!==ordS[b.status])return ordS[a.status]-ordS[b.status];return (b.delta||0)-(a.delta||0);});
@@ -2229,6 +2231,7 @@ function cobRender(){
       +'<td>'+distEscAttr(r.desc||'(sem descrição)')+'</td>'
       +'<td class="r num">'+fmt(r.v)+'</td>'
       +'<td class="r num">'+fmt(r.est)+'</td>'
+      +'<td class="r num" style="color:var(--muted)">'+fmt(r.cd)+'</td>'
       +'<td class="r num">'+fmt(r.ped)+'</td>'
       +'<td class="r num">'+fmt(r.apos)+'</td>'
       +'<td class="r num" style="color:'+col+'">'+cobCov(r)+'</td>'
@@ -2237,14 +2240,14 @@ function cobRender(){
       +'<td class="r" style="font-size:11.5px;color:'+col+';white-space:nowrap">'+sug+'</td>'
       +'</tr>';
   }).join('');
-  $('#cob-body').innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Vendas</th><th class="r">Estoque</th><th class="r">Pedido</th><th class="r">Após</th><th class="r">Cob.(dias)</th><th class="r">Ideal</th><th class="r">Status</th><th class="r">Sugestão</th></tr></thead><tbody>'+body+'</tbody></table>';
+  $('#cob-body').innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Vendas</th><th class="r">Estoque</th><th class="r">CD</th><th class="r">Pedido</th><th class="r">Após</th><th class="r">Cob.(dias)</th><th class="r">Ideal</th><th class="r">Status</th><th class="r">Sugestão</th></tr></thead><tbody>'+body+'</tbody></table>';
 }
 function cobExport(){
   const rows=COB.rows||[];if(!rows.length){toast('Nada para exportar','warn');return;}
   const lojaNm=(FIXED_STORES.find(a=>a[0]===COB.store)||[null,COB.store])[1];
-  const aoa=[['Cod. Produto','Descricao','Vendas periodo','Venda/dia','Estoque atual','Pedido','Apos pedido','Necessidade ('+COB.alvoD+'d)','Cobertura apos (dias)','Pedido ideal','Status','Sugestao']];
-  rows.forEach(r=>{aoa.push([r.cod,r.desc,r.v,Math.round(r.rate*100)/100,r.est,r.ped,r.apos,Math.round(r.demanda),(r.rate<=0?(r.apos>0?'infinito':0):Math.round(r.apos/r.rate*10)/10),r.idealPed,({falta:'FALTA',excesso:'EXCESSO',semvenda:'SEM VENDA',ok:'OK'})[r.status],(r.status==='falta'?('pedir +'+Math.max(0,r.idealPed-r.ped)):(r.status==='excesso'?('ideal '+r.idealPed):''))]);});
-  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:12},{wch:40},{wch:12},{wch:10},{wch:12},{wch:9},{wch:11},{wch:14},{wch:16},{wch:11},{wch:11},{wch:16}];
+  const aoa=[['Cod. Produto','Descricao','Vendas periodo','Venda/dia','Estoque atual','Estoque CD','Pedido','Apos pedido','Necessidade ('+COB.alvoD+'d)','Cobertura apos (dias)','Pedido ideal','Status','Sugestao']];
+  rows.forEach(r=>{aoa.push([r.cod,r.desc,r.v,Math.round(r.rate*100)/100,r.est,r.cd,r.ped,r.apos,Math.round(r.demanda),(r.rate<=0?(r.apos>0?'infinito':0):Math.round(r.apos/r.rate*10)/10),r.idealPed,({falta:'FALTA',excesso:'EXCESSO',semvenda:'SEM VENDA',ok:'OK'})[r.status],(r.status==='falta'?('pedir +'+Math.max(0,r.idealPed-r.ped)):(r.status==='excesso'?('ideal '+r.idealPed):''))]);});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:12},{wch:40},{wch:12},{wch:10},{wch:12},{wch:11},{wch:9},{wch:11},{wch:14},{wch:16},{wch:11},{wch:11},{wch:16}];
   XLSX.utils.book_append_sheet(wb,ws,'Cobertura');
   XLSX.writeFile(wb,'cobertura_'+slug(lojaNm)+'_'+stamp()+'.xlsx');
   toast('Excel gerado','ok');
