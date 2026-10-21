@@ -510,7 +510,9 @@
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="phist-body"></div></div>
     </div>
     <div class="card" style="margin-top:16px">
-      <div class="hd"><h3>Inventários salvos</h3><span class="sub" id="hist-sub"></span></div>
+      <div class="hd"><h3>Inventários salvos</h3><span class="sub" id="hist-sub"></span>
+        <div class="right"><button class="btn sm pri" onclick="openConsolidar()">Consolidar / verificar duplicados</button></div>
+      </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="hist-body"></div></div>
     </div>
     <div class="note">Os <b>pickings</b> ficam aqui: os <b>em andamento</b> você pode <b>continuar</b> de onde parou; os <b>finalizados</b> guardam o <b>relatório de não entregues</b>. Os inventários finalizados também ficam guardados, com opção de gerar o Excel, reabrir ou excluir.</div>
@@ -709,6 +711,7 @@ function authHeaders(){return {'Authorization':'Bearer '+TOKEN};}
 function onAuthFail(){TOKEN=null;try{localStorage.removeItem('wms_token');}catch(e){}showLogin();}
 const store={
   async get(k){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{headers:authHeaders()});if(r.status===401){onAuthFail();return null;}const j=await r.json();return j.value;}catch(e){return null;}},
+  async getSafe(k){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{headers:authHeaders()});if(r.status===401){onAuthFail();return {ok:false,value:null};}if(!r.ok)return {ok:false,value:null};const j=await r.json();return {ok:true,value:j.value};}catch(e){return {ok:false,value:null};}},
   async set(k,v){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({value:v})});if(r.status===401){onAuthFail();return false;}return r.ok;}catch(e){return false;}},
   async del(k){try{await fetch('/api/kv/'+encodeURIComponent(k),{method:'DELETE',headers:authHeaders()});}catch(e){}}
 };
@@ -727,6 +730,10 @@ let tab='contagem';
 let imp=null;            // pending import {headers,rows}
 let locked=false;       // trava de leitura quando item não cadastrado
 let blocked=0;          // contador de bloqueios na sessão
+let DEVICE=''; try{DEVICE=localStorage.getItem('wms_dev')||'';}catch(e){}
+if(!DEVICE){DEVICE='PC-'+Math.random().toString(36).slice(2,6).toUpperCase();try{localStorage.setItem('wms_dev',DEVICE);}catch(e){}}
+function devName(){try{return localStorage.getItem('wms_devname')||DEVICE;}catch(e){return DEVICE;}}
+let curOrigin=null;     // {id,label} do inventário aberto via "Reabrir" (continuação atualiza o mesmo registro)
 let SAVED=[];           // inventários finalizados
 
 function loadBase(){try{const el=document.getElementById('base-data');return el?(JSON.parse(el.textContent)||[]):[];}catch(e){return [];}}
@@ -1269,21 +1276,26 @@ async function finalizeCount(){
   if(!order.length){toast('A contagem está vazia — nada para finalizar','warn');return;}
   const label=idValue()||('Contagem '+new Date().toLocaleString('pt-BR'));
   const unidades=order.reduce((a,k)=>a+counts[k].qty,0);
-  const snap={id:'INV'+Date.now(),label,date:Date.now(),itens:order.length,unidades,leituras:reads.length,blocked,
+  // continuação (Reabrir) atualiza o MESMO registro; senão cria um novo
+  const cont=curOrigin&&curOrigin.id;
+  const id=cont?curOrigin.id:('INV'+Date.now());
+  const snap={id,label,date:Date.now(),itens:order.length,unidades,leituras:reads.length,blocked,
+    dev:devName(),cont:!!cont,parent:cont?curOrigin.id:'',
     counts:JSON.parse(JSON.stringify(counts)),order:order.slice(),reads:reads.slice()};
-  // relê a lista atual do servidor e junta (não sobrescreve o que outros computadores salvaram)
-  let serverList=[];try{serverList=await store.get(K_HIST);}catch(e){}
-  if(!Array.isArray(serverList))serverList=SAVED.slice();
-  const merged=[snap].concat(serverList.filter(x=>x&&x.id!==snap.id));
-  const ok=await store.set(K_HIST,merged);
-  if(!ok){toast('Não foi possível salvar (armazenamento cheio). Gere o Excel e libere espaço.','err');return;}
-  SAVED=merged;
-  // gera o Excel e o TXT automaticamente
+  // 1) backup local SEMPRE primeiro — o dado nunca se perde, mesmo se o servidor falhar
   XLSX.writeFile(buildWorkbook(counts,order,reads),'inventario_'+slug(label)+'_'+stamp()+'.xlsx');
   downloadTxt('inventario_'+slug(label)+'_'+stamp()+'.txt',buildTxt(counts,order));
+  // 2) lê a lista atual do servidor de forma SEGURA (se a leitura falhar, NÃO grava por cima)
+  const rd=await store.getSafe(K_HIST);
+  if(!rd.ok){toast('Contagem salva em Excel/TXT, mas NÃO consegui gravar no servidor agora (conexão). Guarde o Excel e tente "Finalizar" de novo em instantes.','err');return;}
+  const serverList=Array.isArray(rd.value)?rd.value:[];
+  const merged=[snap].concat(serverList.filter(x=>x&&x.id!==id));
+  const ok=await store.set(K_HIST,merged);
+  if(!ok){toast('Contagem salva em Excel/TXT, mas o servidor recusou a gravação. Guarde o Excel e tente de novo.','err');return;}
+  SAVED=merged;curOrigin=null;
   // limpa para a próxima contagem
   counts={};order=[];reads=[];blocked=0;unlock();
-  await store.set(K_SESS,{counts,order,reads,blocked,invId:''});
+  await store.set(K_SESS,{counts,order,reads,blocked,invId:'',origin:''});
   if($('#inv-id'))$('#inv-id').value='';
   $('#last').className='last idle';
   $('#last').innerHTML='<div class="mark">⌖</div><div><div class="big">Contagem salva</div><div class="sub">Guardada em “Salvos”. Excel e TXT gerados. Pode iniciar a próxima contagem.</div></div>';
@@ -1311,10 +1323,11 @@ function renderHistory(){
   $('#hist-sub').textContent=SAVED.length+' inventário(s) salvo(s)';
   const ts=$('#tab-salvos');if(ts)ts.textContent='Salvos'+(SAVED.length?' ('+SAVED.length+')':'');
   if(!SAVED.length){body.innerHTML='<div class="empty"><div class="big">≣</div>Nenhum inventário salvo ainda. Finalize uma contagem para guardar aqui.</div>';return;}
-  body.innerHTML=`<table><thead><tr><th>Data</th><th>Identificação</th><th class="r">Itens</th><th class="r">Unidades</th><th></th></tr></thead><tbody>${
+  body.innerHTML=`<table><thead><tr><th>Data</th><th>Identificação</th><th>PC</th><th class="r">Itens</th><th class="r">Unidades</th><th></th></tr></thead><tbody>${
     SAVED.map(s=>`<tr>
       <td class="mono" style="color:var(--muted);white-space:nowrap">${new Date(s.date).toLocaleString('pt-BR')}</td>
-      <td>${(s.label||'').replace(/</g,'&lt;')}</td>
+      <td>${(s.label||'').replace(/</g,'&lt;')}${s.cont?' <span class="badge b-info" style="font-size:10px">continuação</span>':''}</td>
+      <td class="mono" style="color:var(--muted);font-size:11.5px">${(s.dev||'—').replace(/</g,'&lt;')}</td>
       <td class="r mono">${fmt(s.itens)}</td>
       <td class="r mono">${fmt(s.unidades)}</td>
       <td class="r" style="white-space:nowrap">
@@ -1329,17 +1342,99 @@ function exportFromHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;XLS
 async function reopenHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;
   if(order.length && !confirm('Reabrir vai substituir a contagem que está na tela agora. Continuar?'))return;
   counts=JSON.parse(JSON.stringify(s.counts));order=s.order.slice();reads=s.reads.slice();blocked=s.blocked||0;
-  await store.set(K_SESS,{counts,order,reads,blocked,invId:s.label});
+  curOrigin={id:s.id,label:s.label};
+  await store.set(K_SESS,{counts,order,reads,blocked,invId:s.label,origin:s.id});
   switchTab('contagem');if($('#inv-id'))$('#inv-id').value=s.label;renderStats();renderCount();
-  toast('Contagem reaberta — finalize de novo para salvar as alterações','ok');
+  toast('Continuando "'+(s.label||'contagem')+'". Ao finalizar, ATUALIZA este mesmo inventário (não cria duplicado).','ok');
 }
-async function delHistory(id){let serverList=[];try{serverList=await store.get(K_HIST);}catch(e){}if(!Array.isArray(serverList))serverList=SAVED.slice();const s=serverList.find(x=>x.id===id)||SAVED.find(x=>x.id===id);if(!s)return;if(!confirm('Excluir o inventário "'+s.label+'"? Não dá para desfazer.'))return;const merged=serverList.filter(x=>x&&x.id!==id);await store.set(K_HIST,merged);SAVED=merged;renderHistory();toast('Inventário excluído','ok');}
+async function delHistory(id){const s=SAVED.find(x=>x.id===id);if(!s)return;if(!confirm('Excluir o inventário "'+s.label+'"? Não dá para desfazer.'))return;const rd=await store.getSafe(K_HIST);if(!rd.ok){toast('Não consegui falar com o servidor agora — tente de novo em instantes (nada foi alterado).','err');return;}const serverList=Array.isArray(rd.value)?rd.value:[];const merged=serverList.filter(x=>x&&x.id!==id);const ok=await store.set(K_HIST,merged);if(!ok){toast('O servidor recusou a exclusão — tente de novo.','err');return;}SAVED=merged;renderHistory();toast('Inventário excluído','ok');}
+
+/* ---------- CONSOLIDAR / detectar novo vs continuação ---------- */
+function invMap(s){const m={};(s.order||[]).forEach(function(k){const c=(s.counts||{})[k];if(!c)return;const key=String(c.cod||c.ean||c.code||k);m[key]=(m[key]||0)+(c.qty||0);});return m;}
+function invUnits(m){var t=0;for(var k in m)t+=m[k];return t;}
+function isSuper(big,small){const sk=Object.keys(small);if(!sk.length)return false;for(var i=0;i<sk.length;i++){const k=sk[i];if(!(k in big)||big[k]<small[k])return false;}return true;}
+function invDominates(A,B){ // A "cobre" B (B é parcial/continuação coberta por A)?
+  if(A.id===B.id)return false;
+  if(!isSuper(A._m,B._m))return false;
+  if(A._u!==B._u)return A._u>B._u;
+  if(A._c!==B._c)return A._c>B._c;
+  if((A.date||0)!==(B.date||0))return (A.date||0)>(B.date||0);
+  return String(A.id)>String(B.id);
+}
+function analyzeSaved(){
+  const list=SAVED.map(function(s){const m=invMap(s);const o=Object.assign({},s);o._m=m;o._u=invUnits(m);o._c=Object.keys(m).length;o._coveredBy=null;return o;});
+  list.forEach(function(a){list.forEach(function(b){if(a===b)return;if(invDominates(a,b)){if(!b._coveredBy||a._u>b._coveredBy._u)b._coveredBy=a;}});});
+  const keepers=list.filter(function(x){return !x._coveredBy;});
+  const covered=list.filter(function(x){return x._coveredBy;});
+  const warns=[];
+  for(var i=0;i<keepers.length;i++)for(var j=i+1;j<keepers.length;j++){
+    const A=keepers[i],B=keepers[j];var sh=0;for(var k in A._m){if(k in B._m)sh++;}
+    const mn=Math.min(A._c,B._c);if(mn>0&&sh/mn>=0.5)warns.push({a:A,b:B,shared:sh});
+  }
+  const tot={};keepers.forEach(function(x){for(var k in x._m)tot[k]=(tot[k]||0)+x._m[k];});
+  return {list:list,keepers:keepers,covered:covered,warns:warns,totCodes:Object.keys(tot).length,totUnits:invUnits(tot)};
+}
+function consFmt(s){return new Date(s.date).toLocaleString('pt-BR');}
+async function openConsolidar(){
+  const rd=await store.getSafe(K_HIST);if(rd.ok&&Array.isArray(rd.value))SAVED=rd.value;
+  if(!SAVED.length){toast('Nenhum inventário salvo para consolidar.','warn');return;}
+  const a=analyzeSaved();
+  const kRows=a.keepers.slice().sort(function(x,y){return (y.date||0)-(x.date||0);}).map(function(s){
+    return '<tr><td>'+distEscAttr(s.label||'(sem nome)')+'</td><td class="mono" style="font-size:11px;color:var(--muted)">'+distEscAttr(s.dev||'—')+'</td><td class="mono" style="white-space:nowrap;color:var(--muted)">'+consFmt(s)+'</td><td class="r mono">'+fmt(s._c)+'</td><td class="r mono">'+fmt(s._u)+'</td></tr>';
+  }).join('');
+  const cRows=a.covered.slice().sort(function(x,y){return (y.date||0)-(x.date||0);}).map(function(s){
+    return '<tr style="color:var(--muted)"><td>'+distEscAttr(s.label||'(sem nome)')+'</td><td class="mono" style="font-size:11px">'+distEscAttr(s.dev||'—')+'</td><td class="mono" style="white-space:nowrap">'+consFmt(s)+'</td><td class="r mono">'+fmt(s._c)+'</td><td class="r mono">'+fmt(s._u)+'</td><td style="font-size:11.5px">coberto por <b>'+distEscAttr((s._coveredBy&&s._coveredBy.label)||'—')+'</b> ('+consFmt(s._coveredBy)+')</td></tr>';
+  }).join('');
+  const wRows=a.warns.map(function(w){
+    return '<li style="margin-bottom:6px"><b>'+distEscAttr(w.a.label||'(sem nome)')+'</b> e <b>'+distEscAttr(w.b.label||'(sem nome)')+'</b> têm '+w.shared+' produtos em comum, mas nenhum cobre o outro — podem ser a <b>mesma área contada duas vezes</b> (somar daria duplicado) ou áreas diferentes que por acaso têm itens iguais. Confira.</li>';
+  }).join('');
+  const html=''
+    +'<div style="position:fixed;inset:0;background:rgba(10,20,40,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px" id="cons-ov" onclick="if(event.target===this)closeConsolidar()">'
+    +'<div style="background:#fff;border-radius:14px;max-width:920px;width:100%;margin:auto;box-shadow:0 10px 40px rgba(10,30,80,.3);overflow:hidden">'
+    +'<div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line2)"><div style="font-weight:800;font-size:17px">Consolidar inventários</div><div style="margin-left:auto"><button class="btn sm gho" onclick="closeConsolidar()">fechar</button></div></div>'
+    +'<div style="padding:18px 20px">'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">'
+    +'<div style="flex:1;min-width:150px;background:#eef4ff;border:1px solid #d4e2ff;border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:#33507f">Contagens a manter</div><div style="font-size:24px;font-weight:800;color:#0b2a66">'+a.keepers.length+'</div></div>'
+    +'<div style="flex:1;min-width:150px;background:#f4f6fa;border:1px solid var(--line2);border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:var(--muted)">Cobertas (continuações/duplicatas)</div><div style="font-size:24px;font-weight:800">'+a.covered.length+'</div></div>'
+    +'<div style="flex:1;min-width:150px;background:#eafaef;border:1px solid #c7ecd2;border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:#1c6b37">Total consolidado</div><div style="font-size:24px;font-weight:800;color:#13602f">'+fmt(a.totUnits)+'</div><div style="font-size:11px;color:#1c6b37">'+fmt(a.totCodes)+' produtos distintos</div></div>'
+    +'</div>'
+    +(a.warns.length?('<div style="background:var(--warn-bg,#fff7e6);border:1px solid #f0dcb4;border-radius:10px;padding:12px 14px;margin-bottom:16px"><div style="font-weight:700;color:#7a4b00;margin-bottom:6px">⚠ Possível dupla contagem — revisar</div><ul style="margin:0;padding-left:18px;font-size:12.5px;color:#5c4300">'+wRows+'</ul></div>'):'')
+    +'<div style="font-weight:700;font-size:13px;margin:4px 0 6px">Contagens a manter ('+a.keepers.length+')</div>'
+    +'<div style="max-height:200px;overflow:auto;border:1px solid var(--line2);border-radius:8px;margin-bottom:16px"><table style="width:100%;font-size:12.5px"><thead><tr><th style="text-align:left;padding:7px 10px">Identificação</th><th style="text-align:left;padding:7px 10px">PC</th><th style="text-align:left;padding:7px 10px">Data</th><th style="text-align:right;padding:7px 10px">Itens</th><th style="text-align:right;padding:7px 10px">Unid.</th></tr></thead><tbody>'+(kRows||'<tr><td style="padding:10px;color:var(--muted)">nenhuma</td></tr>')+'</tbody></table></div>'
+    +(a.covered.length?('<div style="font-weight:700;font-size:13px;margin:4px 0 6px">Cobertas — podem ser excluídas sem perder nada ('+a.covered.length+')</div><div style="max-height:180px;overflow:auto;border:1px solid var(--line2);border-radius:8px;margin-bottom:16px"><table style="width:100%;font-size:12px"><thead><tr><th style="text-align:left;padding:7px 10px">Identificação</th><th style="text-align:left;padding:7px 10px">PC</th><th style="text-align:left;padding:7px 10px">Data</th><th style="text-align:right;padding:7px 10px">Itens</th><th style="text-align:right;padding:7px 10px">Unid.</th><th style="text-align:left;padding:7px 10px">Situação</th></tr></thead><tbody>'+cRows+'</tbody></table></div>'):'')
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--line2);padding-top:14px">'
+    +'<button class="btn" onclick="exportConsolidado()">Exportar consolidado (Excel + TXT)</button>'
+    +(a.covered.length?'<button class="btn gho dgr" onclick="excluirCobertos()">Excluir as '+a.covered.length+' cobertas</button>':'')
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--muted);margin-top:12px">Como funciona: uma contagem é marcada <b>coberta</b> quando todos os itens dela aparecem em outra mais completa (caso típico de "Reabrir e continuar"). Essas podem ser excluídas sem mudar o total. O <b>total consolidado</b> soma só as contagens a manter.</div>'
+    +'</div></div></div>';
+  const d=document.createElement('div');d.id='cons-wrap';d.innerHTML=html;document.body.appendChild(d);
+}
+function closeConsolidar(){const w=document.getElementById('cons-wrap');if(w)w.remove();}
+function exportConsolidado(){
+  const a=analyzeSaved();const counts2={};const order2=[];
+  a.keepers.forEach(function(s){(s.order||[]).forEach(function(k){const c=(s.counts||{})[k];if(!c)return;const key='C:'+String(c.cod||c.ean||c.code||k);if(!counts2[key]){counts2[key]={key:key,cod:c.cod||'',ean:c.ean||'',desc:c.desc||'',tam:c.tam||'',qty:0,code:c.code||c.ean||c.cod||'',found:true};order2.push(key);}counts2[key].qty+=(c.qty||0);if(!counts2[key].desc&&c.desc)counts2[key].desc=c.desc;});});
+  if(!order2.length){toast('Nada para exportar.','warn');return;}
+  XLSX.writeFile(buildWorkbook(counts2,order2,[]),'inventario_CONSOLIDADO_'+stamp()+'.xlsx');
+  downloadTxt('inventario_CONSOLIDADO_'+stamp()+'.txt',buildTxt(counts2,order2));
+  toast('Consolidado gerado: '+order2.length+' produtos.','ok');
+}
+async function excluirCobertos(){
+  const a=analyzeSaved();const ids=a.covered.map(function(x){return x.id;});
+  if(!ids.length){toast('Nenhuma contagem coberta.','warn');return;}
+  if(!confirm('Excluir '+ids.length+' contagem(ns) coberta(s)?\n\nSão versões parciais já contidas em outra mais completa. O total consolidado NÃO muda. Não dá para desfazer.'))return;
+  const rd=await store.getSafe(K_HIST);if(!rd.ok){toast('Servidor indisponível agora — tente de novo.','err');return;}
+  const serverList=Array.isArray(rd.value)?rd.value:[];
+  const merged=serverList.filter(function(x){return x&&ids.indexOf(x.id)<0;});
+  const ok=await store.set(K_HIST,merged);if(!ok){toast('O servidor recusou — tente de novo.','err');return;}
+  SAVED=merged;closeConsolidar();renderHistory();toast(ids.length+' coberta(s) removida(s).','ok');
+}
 
 /* ---------- session ---------- */
-let saveT=null;function persistSession(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(K_SESS,{counts,order,reads,blocked,invId:idValue()}),250);}
+let saveT=null;function persistSession(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(K_SESS,{counts,order,reads,blocked,invId:idValue(),origin:curOrigin?curOrigin.id:''}),250);}
 async function newSession(){
   if(order.length && !confirm('Iniciar uma nova contagem? A contagem atual será apagada e NÃO será salva (use “Finalizar e salvar” se quiser guardá-la).'))return;
-  counts={};order=[];reads=[];blocked=0;unlock();await store.set(K_SESS,{counts,order,reads,blocked,invId:''});
+  counts={};order=[];reads=[];blocked=0;unlock();curOrigin=null;await store.set(K_SESS,{counts,order,reads,blocked,invId:'',origin:''});
   if($('#inv-id'))$('#inv-id').value='';
   $('#last').className='last idle';$('#last').innerHTML='<div class="mark">⌖</div><div><div class="big">Pronto para contar</div><div class="sub">Bipe um produto — ele registra sozinho e já fica pronto para o próximo, sem apertar Enter.</div></div>';
   renderStats();renderCount();focusScan();
@@ -2538,7 +2633,7 @@ async function startApp(){
   else{CATALOG=[];}
   buildIndex();
   $('#cat-status').textContent='Cadastro: '+fmt(CATALOG.length)+' itens';
-  const sess=await store.get(K_SESS);if(sess){counts=sess.counts||{};order=sess.order||[];reads=sess.reads||[];blocked=sess.blocked||0;if(sess.invId&&$('#inv-id'))$('#inv-id').value=sess.invId;}
+  const sess=await store.get(K_SESS);if(sess){counts=sess.counts||{};order=sess.order||[];reads=sess.reads||[];blocked=sess.blocked||0;if(sess.invId&&$('#inv-id'))$('#inv-id').value=sess.invId;if(sess.origin){curOrigin={id:sess.origin,label:sess.invId||''};}}
   const hist=await store.get(K_HIST);if(hist&&Array.isArray(hist))SAVED=hist;
   await loadSaldo();await loadMov();await loadAlloc();await loadVagas();await loadDist();await loadVendas();await loadLojaEst();await loadEnt();await loadRdist();await loadPick();
   renderStats();renderCount();renderCatalog();renderHistory();renderVagasRegistry();updateVagaDatalist();
