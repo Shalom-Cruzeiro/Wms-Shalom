@@ -284,6 +284,7 @@
     <button class="nav" id="nav-distribuicao" onclick="switchTab('distribuicao')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 014 4 4 4 0 01-2 3.4V11h5a2 2 0 012 2v2.6A4 4 0 0123 19a4 4 0 11-6-3.4V13h-4v2.6A4 4 0 0111 19a4 4 0 11-6-3.4V13a2 2 0 012-2h5V9.4A4 4 0 018 6a4 4 0 014-4z"/></svg></span>Distribuição</button>
     <button class="nav" id="nav-diventrada" onclick="switchTab('diventrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l9 4v6c0 5-3.8 8.5-9 10-5.2-1.5-9-5-9-10V6l9-4zm0 5a3 3 0 00-3 3h2a1 1 0 112 0c0 .6-.4 1-1 1.4-1 .6-1.6 1.3-1.6 2.6h2c0-.5.3-.8 1-1.2A3 3 0 0012 7zm-1 8v2h2v-2h-2z"/></svg></span>Dividir entrada</button>
     <button class="nav" id="nav-rdist" onclick="switchTab('rdist')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v4h-7V3zm0 6h7v4h-7V9zm0 6h7v6h-7v-6zM3 12h7v9H3v-9z"/></svg></span>Distribuir estoque</button>
+    <button class="nav" id="nav-cobertura" onclick="switchTab('cobertura')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3v18h18v-2H5V3H3zm4 12h2v4H7v-4zm4-6h2v10h-2V9zm4 3h2v7h-2v-7zm4-8h2v15h-2V4z"/></svg></span>Cobertura do pedido</button>
     <div class="nav-sec">Movimentação</div>
     <button class="nav" id="nav-picking" onclick="switchTab('picking')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm2 4h14l-1 12H6L5 8zm4 3v6h2v-6H9zm4 0v6h2v-6h-2z"/></svg></span>Picking</button>
     <button class="nav" id="nav-entrada" onclick="switchTab('entrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L11 12.2zM5 19h14v2H5z"/></svg></span>Entrada XML</button>
@@ -694,6 +695,45 @@
     <div class="note">Escolha os produtos, defina os percentuais e clique em <b>Fazer a divisão</b>. O “estoque a dividir” vem do inventário por loja (CD, ou CD + lojas, conforme o seletor lá em cima). A divisão considera o estoque atual de cada loja, manda mais para quem tem menos, e você pode ajustar célula a célula.</div>
   </section>
 
+  <!-- ============== COBERTURA DO PEDIDO ============== -->
+  <section class="view" id="view-cobertura" style="display:none">
+    <div class="card">
+      <div class="hd"><h3>Cobertura do pedido da loja</h3><span class="sub">confere se o pedido + estoque atual cobrem o período desejado</span></div>
+      <div class="bd">
+        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:14px">
+          <div class="fld" style="flex:1;min-width:230px">
+            <label>1) Vendas dos últimos 15 dias (arquivo do Microvix)</label>
+            <input type="file" id="cob-vfile" accept=".xls,.xlsx,.html,.htm" onchange="onCobVendas(event)">
+            <div id="cob-vinfo" style="margin-top:6px;font-size:12px;color:var(--muted)">Relatório "Produtos/Serviços Vendidos" da loja.</div>
+          </div>
+          <div class="fld" style="flex:1;min-width:230px">
+            <label>2) Pedido da semana (PDF ou planilha)</label>
+            <input type="file" id="cob-pfile" accept=".pdf,.xlsx,.xls,.csv" onchange="onCobPedido(event)">
+            <div id="cob-pinfo" style="margin-top:6px;font-size:12px;color:var(--muted)">O mesmo PDF que você usa para distribuir.</div>
+          </div>
+        </div>
+        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:14px;margin-top:6px">
+          <div class="fld" style="flex:none;width:190px"><label>Loja</label>
+            <select class="t" id="cob-store"></select>
+          </div>
+          <div class="fld" style="flex:none;width:130px"><label>Período vendas (dias)</label><input class="t mono" id="cob-days" type="number" min="1" value="15"></div>
+          <div class="fld" style="flex:none;width:150px"><label>Cobertura estoque (dias)</label><input class="t mono" id="cob-estq" type="number" min="0" value="15"></div>
+          <div class="fld" style="flex:none;width:150px"><label>Tempo de entrega (dias)</label><input class="t mono" id="cob-lead" type="number" min="0" value="7"></div>
+          <div class="fld" style="flex:none;width:130px"><label>Tolerância (%)</label><input class="t mono" id="cob-tol" type="number" min="0" value="20"></div>
+          <button class="btn pri" style="padding:12px 22px" onclick="cobAnalisar()">Analisar</button>
+        </div>
+        <div id="cob-status" style="margin-top:8px;font-size:12.5px;color:var(--muted)"></div>
+      </div>
+    </div>
+    <div class="card" id="cob-result-card" style="margin-top:16px;display:none">
+      <div class="hd"><h3>Resultado</h3><span class="sub" id="cob-sub"></span>
+        <div class="right"><button class="btn sm" onclick="cobExport()">Exportar Excel</button></div>
+      </div>
+      <div class="bd" style="padding:0"><div id="cob-kpis" style="display:flex;gap:12px;flex-wrap:wrap;padding:14px 18px"></div><div class="tbl-scroll" id="cob-body"></div></div>
+    </div>
+    <div class="note">Como funciona: o sistema calcula a <b>venda média por dia</b> (vendas do período ÷ dias), projeta a <b>necessidade</b> para <b>cobertura de estoque + tempo de entrega</b> (padrão 15 + 7 = 22 dias) e compara com o que a loja terá <b>depois do pedido</b> (estoque atual + pedido). Aponta <b>falta</b> (pedindo de menos), <b>excesso</b> (pedindo demais) e <b>sem venda</b> (item pedido que não vendeu no período). O estoque atual por loja vem do último inventário por loja importado.</div>
+  </section>
+
   <section class="view" id="view-picking" style="display:none">
     <div id="pick-body"></div>
     <div class="note">O picking separa <b>uma loja por vez</b>, seguindo a <b>ordem das vagas</b> (A.1.1, A.1.2…). Mostra um produto por vez; bipe o código de barras <b>uma vez por unidade</b>. Ao completar a quantidade, pula para o próximo. No fim aparece o resumo. (Versão de teste — não altera o saldo, só marca o que foi separado.)</div>
@@ -779,10 +819,10 @@ function onContagem(){return tab==='contagem';}
 function focusScan(){if(onContagem()&&!locked){const i=$('#scan');if(i)i.focus();}}
 
 /* ---------- tabs ---------- */
-var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque',picking:'Picking'};
+var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque',cobertura:'Cobertura do pedido',picking:'Picking'};
 function switchTab(t){
   tab=t;
-  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist','picking'].forEach(v=>{
+  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist','cobertura','picking'].forEach(v=>{
     const sec=$('#view-'+v);if(sec)sec.style.display=t===v?'':'none';
     const nv=$('#nav-'+v);if(nv)nv.classList.toggle('on',t===v);
   });
@@ -797,6 +837,7 @@ function switchTab(t){
   else if(t==='distribuicao'){renderDist();}
   else if(t==='diventrada'){renderDivEnt();}
   else if(t==='rdist'){renderRdist();}
+  else if(t==='cobertura'){cobInit();}
   else if(t==='picking'){renderPick();}
   else focusScan();
 }
@@ -2091,6 +2132,120 @@ function parseStorePdf(lines){
     // linha de descrição/continuação -> ignora
   });
   return {map:map,info:{}};
+}
+
+/* ===================== COBERTURA DO PEDIDO ===================== */
+let COB={vendas:null,vInfo:{},pedido:null,pInfo:{},rows:null,storeDet:'',days:15,dIni:'',dFim:''};
+function cobInit(){const sel=$('#cob-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}}
+function cobVNum(s){s=String(s==null?'':s).trim();if(!s)return 0;s=s.replace(/\s/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Math.round(parseFloat(s)||0);}
+function cobDiasEntre(a,b){function pd(s){const p=s.split('/');return new Date(+p[2],+p[1]-1,+p[0]);}const d1=pd(a),d2=pd(b);const n=Math.round((d2-d1)/86400000)+1;return (isFinite(n)&&n>0)?n:15;}
+function parseVendasHtml(text){
+  const doc=new DOMParser().parseFromString(text,'text/html');
+  const txt=(doc.body?doc.body.textContent:'')||'';
+  let emp='';const me=txt.match(/Empresa\(s\):\s*(\d{1,3})/i);if(me)emp=me[1];
+  const store=ENT_NUM2ID[emp]||'';
+  const dts=txt.match(/\d{2}\/\d{2}\/\d{4}/g)||[];let dIni=dts[0]||'',dFim=dts[1]||'',days=15;
+  if(dIni&&dFim)days=cobDiasEntre(dIni,dFim);
+  const trs=Array.prototype.slice.call(doc.querySelectorAll('tr'));
+  let iCod=0,iDesc=1,iEan=3,iQty=5;
+  for(var t=0;t<trs.length;t++){const cs=Array.prototype.map.call(trs[t].children,td=>td.textContent.trim().toLowerCase());
+    if(cs[0]==='codigo'||cs[0]==='código'){const u=cs.findIndex(x=>x==='un'||x.indexOf('un')===0);if(u>=0)iQty=u+1;const e=cs.findIndex(x=>x.indexOf('barras')>=0);if(e>=0)iEan=e;break;}}
+  const map={},info={};
+  trs.forEach(tr=>{const cs=Array.prototype.map.call(tr.children,td=>td.textContent.trim());if(cs.length<=iQty)return;
+    const cod=cleanCode(cs[iCod]);if(!/^\d+$/.test(cod))return;
+    const q=cobVNum(cs[iQty]);map[cod]=(map[cod]||0)+q;
+    const d=cs[iDesc]||'',e=cleanCode(cs[iEan]||'');if((d||e)&&!info[cod])info[cod]={desc:d,ean:e};});
+  return {store,emp,days,dIni,dFim,map,info};
+}
+function onCobVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const res=parseVendasHtml(String(r.result));COB.vendas=res.map;COB.vInfo=res.info;COB.storeDet=res.store;COB.days=res.days;COB.dIni=res.dIni;COB.dFim=res.dFim;
+    cobInit();const sel=$('#cob-store');if(sel&&res.store)sel.value=res.store;if($('#cob-days'))$('#cob-days').value=res.days;
+    const nprod=Object.keys(res.map).length;const tot=Object.keys(res.map).reduce((a,k)=>a+res.map[k],0);
+    const lojaNm=(FIXED_STORES.find(a=>a[0]===res.store)||[null,'(não identificada — selecione)'])[1];
+    $('#cob-vinfo').innerHTML='<b>'+fmt(nprod)+'</b> produtos · <b>'+fmt(tot)+'</b> un vendidas · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'');
+    toast('Vendas carregadas','ok');
+  }catch(e){toast('Não consegui ler o arquivo de vendas: '+e.message,'err');}};
+  r.readAsText(f,'utf-8');ev.target.value='';
+}
+function onCobPedido(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const isPdf=/\.pdf$/i.test(f.name);const r=new FileReader();
+  r.onload=async()=>{try{let map={},info={};
+    if(isPdf){const o=await readPdfBaixa(r.result);const res=parseStorePdf(o.lines);map=res.map;info=res.info||{};}
+    else{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const res=parseStoreSheet(wb);map=res.map;info=res.info||{};}
+    COB.pedido=map;COB.pInfo=info;
+    const nprod=Object.keys(map).length;const tot=Object.keys(map).reduce((a,k)=>a+map[k],0);
+    $('#cob-pinfo').innerHTML='<b>'+fmt(nprod)+'</b> itens no pedido · <b>'+fmt(tot)+'</b> un';
+    toast('Pedido carregado: '+nprod+' itens','ok');
+  }catch(e){toast('Não consegui ler o pedido: '+e.message,'err');}};
+  r.readAsArrayBuffer(f);ev.target.value='';
+}
+function cobStockOf(cod,store){const o=(LOJAEST&&LOJAEST.byCod&&LOJAEST.byCod[cod])||null;if(!o)return 0;const v=o[store];return (typeof v==='number')?v:(parseInt(v)||0);}
+function cobDesc(cod){return ((byCod[cod]||{}).desc)||((COB.vInfo||{})[cod]||{}).desc||((COB.pInfo||{})[cod]||{}).desc||'';}
+function cobAnalisar(){
+  if(!COB.vendas){toast('Suba o arquivo de vendas primeiro','warn');return;}
+  const store=($('#cob-store')||{}).value||'';if(!store){toast('Selecione a loja','warn');return;}
+  const days=Math.max(1,+($('#cob-days')||{}).value||15);
+  const estD=Math.max(0,+($('#cob-estq')||{}).value||15),leadD=Math.max(0,+($('#cob-lead')||{}).value||7);
+  const tol=Math.max(0,(+($('#cob-tol')||{}).value||0))/100;const alvoD=estD+leadD;
+  const vendas=COB.vendas||{},pedido=COB.pedido||{};
+  const codes={};Object.keys(vendas).forEach(c=>codes[c]=1);Object.keys(pedido).forEach(c=>codes[c]=1);
+  const rows=[];
+  Object.keys(codes).forEach(cod=>{
+    const v=vendas[cod]||0,ped=pedido[cod]||0;if(v<=0&&ped<=0)return;
+    const rate=v>0?v/days:0;const demanda=rate*alvoD;const est=cobStockOf(cod,store);const apos=est+ped;
+    const idealPed=Math.max(0,Math.ceil(demanda-est));const covApos=rate>0?apos/rate:(apos>0?Infinity:0);
+    let status,delta;
+    if(rate<=0){status=ped>0?'semvenda':'ok';delta=ped;}
+    else if(apos>demanda*(1+tol)+1e-6){status='excesso';delta=Math.round(apos-demanda);}
+    else if(apos<demanda*(1-tol)-1e-6){status='falta';delta=Math.round(demanda-apos);}
+    else {status='ok';delta=0;}
+    rows.push({cod,desc:cobDesc(cod),v,rate,est,ped,apos,demanda,idealPed,covApos,status,delta});
+  });
+  const ordS={falta:0,semvenda:1,excesso:2,ok:3};
+  rows.sort((a,b)=>{if(ordS[a.status]!==ordS[b.status])return ordS[a.status]-ordS[b.status];return (b.delta||0)-(a.delta||0);});
+  COB.rows=rows;COB.store=store;COB.alvoD=alvoD;
+  cobRender();
+}
+function cobBadge(st){if(st==='falta')return '<span class="badge b-err">Falta</span>';if(st==='excesso')return '<span class="badge b-warn">Excesso</span>';if(st==='semvenda')return '<span class="badge b-mut">Sem venda</span>';return '<span class="badge b-ok">OK</span>';}
+function cobCov(r){if(r.rate<=0)return r.apos>0?'∞':'0';return (Math.round(r.apos/r.rate*10)/10).toLocaleString('pt-BR');}
+function cobRender(){
+  const rows=COB.rows||[];$('#cob-result-card').style.display='';
+  const nF=rows.filter(r=>r.status==='falta').length,nE=rows.filter(r=>r.status==='excesso').length,nS=rows.filter(r=>r.status==='semvenda').length,nO=rows.filter(r=>r.status==='ok').length;
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===COB.store)||[null,COB.store])[1];
+  $('#cob-sub').textContent=lojaNm+' · alvo '+COB.alvoD+' dias · '+rows.length+' itens';
+  function kpi(lbl,val,bg,bd,cl){return '<div style="flex:1;min-width:120px;background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:10px 14px"><div style="font-size:11.5px;color:'+cl+'">'+lbl+'</div><div style="font-size:22px;font-weight:800;color:'+cl+'">'+val+'</div></div>';}
+  $('#cob-kpis').innerHTML=
+    kpi('Falta (pedir mais)',nF,'#fdecec','#f5c6c6','#9b1c1c')+
+    kpi('Excesso (pedir menos)',nE,'#fff7e6','#f0dcb4','#7a4b00')+
+    kpi('Pedido sem venda',nS,'#f4f6fa','var(--line2)','#555')+
+    kpi('Coerente',nO,'#eafaef','#c7ecd2','#13602f');
+  if(!rows.length){$('#cob-body').innerHTML='<div class="empty" style="padding:24px">Nada a analisar — confira os arquivos e a loja.</div>';return;}
+  const body=rows.map(r=>{
+    const col=r.status==='falta'?'var(--err)':(r.status==='excesso'?'var(--warn)':'var(--muted)');
+    const sug=r.status==='falta'?('pedir +'+ (r.idealPed-r.ped>0? (r.idealPed-r.ped):r.delta)):(r.status==='excesso'?('ideal '+r.idealPed):(r.status==='semvenda'?'rever':'—'));
+    return '<tr>'
+      +'<td class="mono" style="color:var(--muted)">'+distEscAttr(r.cod)+'</td>'
+      +'<td>'+distEscAttr(r.desc||'(sem descrição)')+'</td>'
+      +'<td class="r num">'+fmt(r.v)+'</td>'
+      +'<td class="r num">'+fmt(r.est)+'</td>'
+      +'<td class="r num">'+fmt(r.ped)+'</td>'
+      +'<td class="r num">'+fmt(r.apos)+'</td>'
+      +'<td class="r num" style="color:'+col+'">'+cobCov(r)+'</td>'
+      +'<td class="r num">'+fmt(r.idealPed)+'</td>'
+      +'<td class="r">'+cobBadge(r.status)+'</td>'
+      +'<td class="r" style="font-size:11.5px;color:'+col+';white-space:nowrap">'+sug+'</td>'
+      +'</tr>';
+  }).join('');
+  $('#cob-body').innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Vendas</th><th class="r">Estoque</th><th class="r">Pedido</th><th class="r">Após</th><th class="r">Cob.(dias)</th><th class="r">Ideal</th><th class="r">Status</th><th class="r">Sugestão</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+function cobExport(){
+  const rows=COB.rows||[];if(!rows.length){toast('Nada para exportar','warn');return;}
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===COB.store)||[null,COB.store])[1];
+  const aoa=[['Cod. Produto','Descricao','Vendas periodo','Venda/dia','Estoque atual','Pedido','Apos pedido','Necessidade ('+COB.alvoD+'d)','Cobertura apos (dias)','Pedido ideal','Status','Sugestao']];
+  rows.forEach(r=>{aoa.push([r.cod,r.desc,r.v,Math.round(r.rate*100)/100,r.est,r.ped,r.apos,Math.round(r.demanda),(r.rate<=0?(r.apos>0?'infinito':0):Math.round(r.apos/r.rate*10)/10),r.idealPed,({falta:'FALTA',excesso:'EXCESSO',semvenda:'SEM VENDA',ok:'OK'})[r.status],(r.status==='falta'?('pedir +'+Math.max(0,r.idealPed-r.ped)):(r.status==='excesso'?('ideal '+r.idealPed):''))]);});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:12},{wch:40},{wch:12},{wch:10},{wch:12},{wch:9},{wch:11},{wch:14},{wch:16},{wch:11},{wch:11},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws,'Cobertura');
+  XLSX.writeFile(wb,'cobertura_'+slug(lojaNm)+'_'+stamp()+'.xlsx');
+  toast('Excel gerado','ok');
 }
 
 function distCodes(){const set={};DIST.stores.forEach(s=>{const d=DIST.demand[s.id]||{};Object.keys(d).forEach(c=>{if(d[c]>0)set[c]=1;});});return Object.keys(set).sort();}
