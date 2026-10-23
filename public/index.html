@@ -2181,6 +2181,7 @@ function onCobPedido(ev){const f=ev.target.files&&ev.target.files[0];if(!f)retur
 }
 function cobStockOf(cod,store){const o=(LOJAEST&&LOJAEST.byCod&&LOJAEST.byCod[cod])||null;if(!o)return 0;const v=o[store];return (typeof v==='number')?v:(parseInt(v)||0);}
 function cobDesc(cod){return ((byCod[cod]||{}).desc)||((COB.vInfo||{})[cod]||{}).desc||((COB.pInfo||{})[cod]||{}).desc||'';}
+function cobEan(cod){const p=byCod[cod]||{};return (p.eans&&p.eans[0])||p.ean||((COB.vInfo||{})[cod]||{}).ean||((COB.pInfo||{})[cod]||{}).ean||'';}
 function cobAnalisar(){
   if(!COB.vendas){toast('Suba o arquivo de vendas primeiro','warn');return;}
   const store=($('#cob-store')||{}).value||'';if(!store){toast('Selecione a loja','warn');return;}
@@ -2202,7 +2203,7 @@ function cobAnalisar(){
     else if(apos<need){status='falta';delta=need-apos;}
     else if(apos>need){status='excesso';delta=apos-need;}
     else {status='ok';delta=0;}
-    rows.push({cod,desc:cobDesc(cod),v,rate,est,ped,cd:cdStock,apos,demanda,idealPed,covApos,status,delta});
+    rows.push({cod,ean:cobEan(cod),desc:cobDesc(cod),v,rate,est,ped,cd:cdStock,apos,demanda,idealPed,covApos,status,delta});
   });
   const ordS={falta:0,semvenda:1,excesso:2,ok:3};
   rows.sort((a,b)=>{if(ordS[a.status]!==ordS[b.status])return ordS[a.status]-ordS[b.status];return (b.delta||0)-(a.delta||0);});
@@ -2227,7 +2228,7 @@ function cobRender(){
     const col=r.status==='falta'?'var(--err)':(r.status==='excesso'?'var(--warn)':'var(--muted)');
     const sug=r.status==='falta'?('pedir +'+ (r.idealPed-r.ped>0? (r.idealPed-r.ped):r.delta)):(r.status==='excesso'?('ideal '+r.idealPed):(r.status==='semvenda'?'rever':'—'));
     return '<tr>'
-      +'<td class="mono" style="color:var(--muted)">'+distEscAttr(r.cod)+'</td>'
+      +'<td class="mono" style="color:var(--muted)">'+distEscAttr(r.ean||r.cod||'—')+'</td>'
       +'<td>'+distEscAttr(r.desc||'(sem descrição)')+'</td>'
       +'<td class="r num">'+fmt(r.v)+'</td>'
       +'<td class="r num">'+fmt(r.est)+'</td>'
@@ -2240,14 +2241,14 @@ function cobRender(){
       +'<td class="r" style="font-size:11.5px;color:'+col+';white-space:nowrap">'+sug+'</td>'
       +'</tr>';
   }).join('');
-  $('#cob-body').innerHTML='<table><thead><tr><th>Cód.</th><th>Descrição</th><th class="r">Vendas</th><th class="r">Estoque</th><th class="r">CD</th><th class="r">Pedido</th><th class="r">Após</th><th class="r">Cob.(dias)</th><th class="r">Ideal</th><th class="r">Status</th><th class="r">Sugestão</th></tr></thead><tbody>'+body+'</tbody></table>';
+  $('#cob-body').innerHTML='<table><thead><tr><th>Cód. Barras</th><th>Descrição</th><th class="r">Vendas</th><th class="r">Estoque</th><th class="r">CD</th><th class="r">Pedido</th><th class="r">Após</th><th class="r">Cob.(dias)</th><th class="r">Ideal</th><th class="r">Status</th><th class="r">Sugestão</th></tr></thead><tbody>'+body+'</tbody></table>';
 }
 function cobExport(){
   const rows=COB.rows||[];if(!rows.length){toast('Nada para exportar','warn');return;}
   const lojaNm=(FIXED_STORES.find(a=>a[0]===COB.store)||[null,COB.store])[1];
-  const aoa=[['Cod. Produto','Descricao','Vendas periodo','Venda/dia','Estoque atual','Estoque CD','Pedido','Apos pedido','Necessidade ('+COB.alvoD+'d)','Cobertura apos (dias)','Pedido ideal','Status','Sugestao']];
-  rows.forEach(r=>{aoa.push([r.cod,r.desc,r.v,Math.round(r.rate*100)/100,r.est,r.cd,r.ped,r.apos,Math.round(r.demanda),(r.rate<=0?(r.apos>0?'infinito':0):Math.round(r.apos/r.rate*10)/10),r.idealPed,({falta:'FALTA',excesso:'EXCESSO',semvenda:'SEM VENDA',ok:'OK'})[r.status],(r.status==='falta'?('pedir +'+Math.max(0,r.idealPed-r.ped)):(r.status==='excesso'?('ideal '+r.idealPed):''))]);});
-  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:12},{wch:40},{wch:12},{wch:10},{wch:12},{wch:11},{wch:9},{wch:11},{wch:14},{wch:16},{wch:11},{wch:11},{wch:16}];
+  const aoa=[['Codigo de Barras','Cod. Produto','Descricao','Vendas periodo','Venda/dia','Estoque atual','Estoque CD','Pedido','Apos pedido','Necessidade ('+COB.alvoD+'d)','Cobertura apos (dias)','Pedido ideal','Status','Sugestao']];
+  rows.forEach(r=>{aoa.push([r.ean||'',r.cod,r.desc,r.v,Math.round(r.rate*100)/100,r.est,r.cd,r.ped,r.apos,Math.round(r.demanda),(r.rate<=0?(r.apos>0?'infinito':0):Math.round(r.apos/r.rate*10)/10),r.idealPed,({falta:'FALTA',excesso:'EXCESSO',semvenda:'SEM VENDA',ok:'OK'})[r.status],(r.status==='falta'?('pedir +'+Math.max(0,r.idealPed-r.ped)):(r.status==='excesso'?('ideal '+r.idealPed):''))]);});
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:12},{wch:40},{wch:12},{wch:10},{wch:12},{wch:11},{wch:9},{wch:11},{wch:14},{wch:16},{wch:11},{wch:11},{wch:16}];
   XLSX.utils.book_append_sheet(wb,ws,'Cobertura');
   XLSX.writeFile(wb,'cobertura_'+slug(lojaNm)+'_'+stamp()+'.xlsx');
   toast('Excel gerado','ok');
