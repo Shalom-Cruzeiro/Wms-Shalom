@@ -2183,6 +2183,8 @@ function parseStorePdf(lines){
 let PED={loja:'',days:15,vendas:null,vInfo:{},rows:[]};
 function pedInit(){const sel=$('#ped-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}}
 function pedForn(cod){return ((byCod[cod]||{}).forn)||'';}
+function pedCusto(cod){return (((PED.vInfo||{})[cod]||{}).custo)||((byCod[cod]||{}).custo)||0;}
+function pedVenda(cod){return (((PED.vInfo||{})[cod]||{}).venda)||((byCod[cod]||{}).venda)||0;}
 function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const res=parseVendasHtml(String(r.result));PED.vendas=res.map;PED.vInfo=res.info;PED.days=res.days;
     pedInit();const sel=$('#ped-store');if(sel&&res.store)sel.value=res.store;if($('#ped-days'))$('#ped-days').value=res.days;
@@ -2205,7 +2207,7 @@ function pedGerar(){
     const rate=v/days;const demanda=rate*alvoD;const estLoja=cobStockOf(cod,store);
     const nec=Math.max(0,Math.ceil(demanda-estLoja));if(nec<=0)return;
     const cd=saldoOf(cod);
-    rows.push({cod:cod,ean:cobEan(cod),desc:cobDesc(cod),forn:pedForn(cod),v:v,estLoja:estLoja,cd:cd,nec:nec,pedido:nec,manual:false});
+    rows.push({cod:cod,ean:cobEan(cod),desc:cobDesc(cod),forn:pedForn(cod),v:v,estLoja:estLoja,cd:cd,nec:nec,pedido:nec,manual:false,custo:pedCusto(cod),venda:pedVenda(cod)});
   });
   rows.sort((a,b)=>{const fa=(a.forn||'~').toLowerCase(),fb=(b.forn||'~').toLowerCase();if(fa!==fb)return fa<fb?-1:1;return (a.desc||'').localeCompare(b.desc||'');});
   PED.rows=rows;pedRender();
@@ -2213,16 +2215,19 @@ function pedGerar(){
 function pedRowCalc(r){const atende=Math.min(r.pedido,r.cd);const comprar=Math.max(0,r.pedido-r.cd);return {atende:atende,comprar:comprar};}
 function pedRender(){
   const rows=PED.rows||[];$('#ped-result-card').style.display='';
-  let tPed=0,tAt=0,tCom=0,nCom=0;
-  rows.forEach(r=>{const c=pedRowCalc(r);tPed+=r.pedido;tAt+=c.atende;tCom+=c.comprar;if(c.comprar>0)nCom++;});
+  let tPed=0,tAt=0,tCom=0,nCom=0,vCusto=0,vVenda=0;
+  rows.forEach(r=>{const c=pedRowCalc(r);tPed+=r.pedido;tAt+=c.atende;tCom+=c.comprar;if(c.comprar>0)nCom++;vCusto+=(r.custo||0)*r.pedido;vVenda+=(r.venda||0)*r.pedido;});
   const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
   $('#ped-sub').textContent=lojaNm+' · alvo '+PED.alvoD+' dias · '+rows.length+' itens';
   function kpi(l,v,bg,bd,cl){return '<div style="flex:1;min-width:130px;background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:10px 14px"><div style="font-size:11.5px;color:'+cl+'">'+l+'</div><div style="font-size:22px;font-weight:800;color:'+cl+'">'+fmt(v)+'</div></div>';}
+  function kpiM(l,v,bg,bd,cl){return '<div style="flex:1;min-width:150px;background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:10px 14px"><div style="font-size:11.5px;color:'+cl+'">'+l+'</div><div style="font-size:19px;font-weight:800;color:'+cl+'">'+fmtBRL(v)+'</div></div>';}
   $('#ped-kpis').innerHTML=
     kpi('Pedido total',tPed,'#eef4ff','#d4e2ff','#0b2a66')+
     kpi('Atende do CD',tAt,'#eafaef','#c7ecd2','#13602f')+
     kpi('Comprar',tCom,'#fff7e6','#f0dcb4','#7a4b00')+
-    kpi('Itens p/ comprar',nCom,'#f4f6fa','var(--line2)','#555');
+    kpi('Itens p/ comprar',nCom,'#f4f6fa','var(--line2)','#555')+
+    kpiM('Custo total do pedido',vCusto,'#f0edff','#ddd4ff','#3a2a7a')+
+    kpiM('Valor de venda total',vVenda,'#e9f6fb','#c4e6f0','#0a5a73');
   if(!rows.length){$('#ped-body').innerHTML='<div class="empty" style="padding:24px">Nenhum item sugerido. Gere a sugestão ou adicione itens.</div>';return;}
   const body=rows.map((r,i)=>{const c=pedRowCalc(r);
     return '<tr>'
@@ -2247,7 +2252,7 @@ function pedAddItem(){
   const p=lookup(raw);const cod=p?(p.cod||raw):raw;
   const ex=PED.rows.find(r=>r.cod===cod);
   if(ex){ex.pedido+=q;}
-  else{PED.rows.unshift({cod:cod,ean:p?cobEan(cod):raw,desc:p?cobDesc(cod):'(fora do cadastro)',forn:p?pedForn(cod):'',v:0,estLoja:p?cobStockOf(cod,PED.loja):0,cd:p?saldoOf(cod):0,nec:q,pedido:q,manual:true});}
+  else{PED.rows.unshift({cod:cod,ean:p?cobEan(cod):raw,desc:p?cobDesc(cod):'(fora do cadastro)',forn:p?pedForn(cod):'',v:0,estLoja:p?cobStockOf(cod,PED.loja):0,cd:p?saldoOf(cod):0,nec:q,pedido:q,manual:true,custo:pedCusto(cod),venda:pedVenda(cod)});}
   if($('#ped-add-cod'))$('#ped-add-cod').value='';if($('#ped-add-qtd'))$('#ped-add-qtd').value='';
   pedRender();
 }
@@ -2292,6 +2297,8 @@ function pedExportCompra(){
 let COB={vendas:null,vInfo:{},pedido:null,pInfo:{},rows:null,storeDet:'',days:15,dIni:'',dFim:''};
 function cobInit(){const sel=$('#cob-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}}
 function cobVNum(s){s=String(s==null?'':s).trim();if(!s)return 0;s=s.replace(/\s/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Math.round(parseFloat(s)||0);}
+function cobMoney(s){s=String(s==null?'':s).trim();if(!s)return 0;s=s.replace(/[^\d.,-]/g,'');if(!s)return 0;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return parseFloat(s)||0;}
+function fmtBRL(n){n=Number(n)||0;return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function cobDiasEntre(a,b){function pd(s){const p=s.split('/');return new Date(+p[2],+p[1]-1,+p[0]);}const d1=pd(a),d2=pd(b);const n=Math.round((d2-d1)/86400000)+1;return (isFinite(n)&&n>0)?n:15;}
 function parseVendasHtml(text){
   const doc=new DOMParser().parseFromString(text,'text/html');
@@ -2301,14 +2308,18 @@ function parseVendasHtml(text){
   const dts=txt.match(/\d{2}\/\d{2}\/\d{4}/g)||[];let dIni=dts[0]||'',dFim=dts[1]||'',days=15;
   if(dIni&&dFim)days=cobDiasEntre(dIni,dFim);
   const trs=Array.prototype.slice.call(doc.querySelectorAll('tr'));
-  let iCod=0,iDesc=1,iEan=3,iQty=5;
+  let iCod=0,iDesc=1,iEan=3,iQty=5,iCusto=-1,iVenda=-1;
   for(var t=0;t<trs.length;t++){const cs=Array.prototype.map.call(trs[t].children,td=>td.textContent.trim().toLowerCase());
-    if(cs[0]==='codigo'||cs[0]==='código'){const u=cs.findIndex(x=>x==='un'||x.indexOf('un')===0);if(u>=0)iQty=u+1;const e=cs.findIndex(x=>x.indexOf('barras')>=0);if(e>=0)iEan=e;break;}}
+    if(cs[0]==='codigo'||cs[0]==='código'){const u=cs.findIndex(x=>x==='un'||x.indexOf('un')===0);if(u>=0)iQty=u+1;const e=cs.findIndex(x=>x.indexOf('barras')>=0);if(e>=0)iEan=e;const cu=cs.findIndex(x=>x.indexOf('custo')>=0);if(cu>=0)iCusto=cu;const vn=cs.findIndex(x=>x.indexOf('venda')>=0);if(vn>=0)iVenda=vn;break;}}
   const map={},info={};
   trs.forEach(tr=>{const cs=Array.prototype.map.call(tr.children,td=>td.textContent.trim());if(cs.length<=iQty)return;
     const cod=cleanCode(cs[iCod]);if(!/^\d+$/.test(cod))return;
     const q=cobVNum(cs[iQty]);map[cod]=(map[cod]||0)+q;
-    const d=cs[iDesc]||'',e=cleanCode(cs[iEan]||'');if((d||e)&&!info[cod])info[cod]={desc:d,ean:e};});
+    const d=cs[iDesc]||'',e=cleanCode(cs[iEan]||'');
+    const cu=(iCusto>=0&&cs.length>iCusto)?cobMoney(cs[iCusto]):0;
+    const vn=(iVenda>=0&&cs.length>iVenda)?cobMoney(cs[iVenda]):0;
+    if(!info[cod])info[cod]={desc:d,ean:e,custo:cu,venda:vn};
+    else{if(cu&&!info[cod].custo)info[cod].custo=cu;if(vn&&!info[cod].venda)info[cod].venda=vn;}});
   return {store,emp,days,dIni,dFim,map,info};
 }
 function onCobVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
