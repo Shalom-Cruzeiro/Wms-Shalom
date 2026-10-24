@@ -284,6 +284,7 @@
     <button class="nav" id="nav-distribuicao" onclick="switchTab('distribuicao')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 014 4 4 4 0 01-2 3.4V11h5a2 2 0 012 2v2.6A4 4 0 0123 19a4 4 0 11-6-3.4V13h-4v2.6A4 4 0 0111 19a4 4 0 11-6-3.4V13a2 2 0 012-2h5V9.4A4 4 0 018 6a4 4 0 014-4z"/></svg></span>Distribuição</button>
     <button class="nav" id="nav-diventrada" onclick="switchTab('diventrada')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l9 4v6c0 5-3.8 8.5-9 10-5.2-1.5-9-5-9-10V6l9-4zm0 5a3 3 0 00-3 3h2a1 1 0 112 0c0 .6-.4 1-1 1.4-1 .6-1.6 1.3-1.6 2.6h2c0-.5.3-.8 1-1.2A3 3 0 0012 7zm-1 8v2h2v-2h-2z"/></svg></span>Dividir entrada</button>
     <button class="nav" id="nav-rdist" onclick="switchTab('rdist')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v4h-7V3zm0 6h7v4h-7V9zm0 6h7v6h-7v-6zM3 12h7v9H3v-9z"/></svg></span>Distribuir estoque</button>
+    <button class="nav" id="nav-pedido" onclick="switchTab('pedido')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.4 12.3a1 1 0 0 0 1 .7h8.7a1 1 0 0 0 1-.8L21 8H7M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm9 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg></span>Pedido (sugestão)</button>
     <button class="nav" id="nav-cobertura" onclick="switchTab('cobertura')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3v18h18v-2H5V3H3zm4 12h2v4H7v-4zm4-6h2v10h-2V9zm4 3h2v7h-2v-7zm4-8h2v15h-2V4z"/></svg></span>Cobertura do pedido</button>
     <div class="nav-sec">Movimentação</div>
     <button class="nav" id="nav-picking" onclick="switchTab('picking')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm2 4h14l-1 12H6L5 8zm4 3v6h2v-6H9zm4 0v6h2v-6h-2z"/></svg></span>Picking</button>
@@ -695,6 +696,48 @@
     <div class="note">Escolha os produtos, defina os percentuais e clique em <b>Fazer a divisão</b>. O “estoque a dividir” vem do inventário por loja (CD, ou CD + lojas, conforme o seletor lá em cima). A divisão considera o estoque atual de cada loja, manda mais para quem tem menos, e você pode ajustar célula a célula.</div>
   </section>
 
+  <!-- ============== PEDIDO (SUGESTÃO) ============== -->
+  <section class="view" id="view-pedido" style="display:none">
+    <div class="card">
+      <div class="hd"><h3>Sugestão de pedido</h3><span class="sub">cruza as vendas do período com o estoque do CD e sugere o pedido</span></div>
+      <div class="bd">
+        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:14px">
+          <div class="fld" style="flex:1;min-width:230px">
+            <label>Vendas do período (arquivo do Microvix)</label>
+            <button class="btn pri" style="width:100%;justify-content:center" onclick="document.getElementById('ped-vfile').click()">Selecionar arquivo de vendas</button>
+            <input type="file" id="ped-vfile" accept=".xls,.xlsx,.html,.htm" onchange="onPedVendas(event)">
+            <div id="ped-vinfo" style="margin-top:6px;font-size:12px;color:var(--muted)">Relatório "Produtos/Serviços Vendidos" da loja.</div>
+          </div>
+          <div class="fld" style="flex:none;width:170px"><label>Loja</label><select class="t" id="ped-store"></select></div>
+          <div class="fld" style="flex:none;width:120px"><label>Período (dias)</label><input class="t mono" id="ped-days" type="number" min="1" value="15"></div>
+          <div class="fld" style="flex:none;width:140px"><label>Cobertura (dias)</label><input class="t mono" id="ped-estq" type="number" min="0" value="15"></div>
+          <div class="fld" style="flex:none;width:140px"><label>Entrega (dias)</label><input class="t mono" id="ped-lead" type="number" min="0" value="7"></div>
+          <button class="btn pri" style="padding:12px 22px" onclick="pedGerar()">Gerar sugestão</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="ped-result-card" style="margin-top:16px;display:none">
+      <div class="hd"><h3>Pedido</h3><span class="sub" id="ped-sub"></span>
+        <div class="right">
+          <button class="btn sm pri" onclick="pedSalvar()">Salvar pedido no sistema</button>
+          <button class="btn sm" onclick="pedExportDist()">Exportar pedido</button>
+          <button class="btn sm" onclick="pedExportCompra()">Exportar compra</button>
+        </div>
+      </div>
+      <div class="bd" style="padding:0">
+        <div id="ped-kpis" style="display:flex;gap:12px;flex-wrap:wrap;padding:14px 18px"></div>
+        <div class="tbl-scroll" id="ped-body"></div>
+        <div style="padding:12px 18px;border-top:1px solid var(--line2);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <b style="font-size:12.5px">+ adicionar item:</b>
+          <input id="ped-add-cod" placeholder="código de barras ou do produto" class="t mono" style="width:220px;padding:8px 10px;font-size:13px">
+          <input id="ped-add-qtd" type="number" min="1" placeholder="qtde" class="t mono" style="width:90px;padding:8px 10px;font-size:13px">
+          <button class="btn sm" onclick="pedAddItem()">adicionar</button>
+        </div>
+      </div>
+    </div>
+    <div class="note">Como funciona: a sugestão parte das <b>vendas do período</b> (venda média/dia × dias de cobertura + entrega), desconta o <b>estoque atual da loja</b> e sugere o pedido. A coluna <b>Atende</b> é o que o <b>CD tem</b> para enviar agora; o que passar disso (ou item que o CD não tem) vira a coluna <b>Comprar</b>, que o botão "Exportar compra por fornecedor" agrupa por fornecedor. Você pode editar as quantidades e adicionar itens.</div>
+  </section>
+
   <!-- ============== COBERTURA DO PEDIDO ============== -->
   <section class="view" id="view-cobertura" style="display:none">
     <div class="card">
@@ -820,10 +863,10 @@ function onContagem(){return tab==='contagem';}
 function focusScan(){if(onContagem()&&!locked){const i=$('#scan');if(i)i.focus();}}
 
 /* ---------- tabs ---------- */
-var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque',cobertura:'Cobertura do pedido',picking:'Picking'};
+var TAB_TITLES={contagem:'Contagem',estoque:'Estoque do CD',entrada:'Entrada por XML',baixa:'Baixa de saldo',vagas:'Almoxarifado',cadastro:'Cadastro de produtos',salvos:'Inventários salvos',distribuicao:'Distribuição entre lojas',diventrada:'Dividir nova entrada',rdist:'Distribuir estoque',pedido:'Pedido (sugestão)',cobertura:'Cobertura do pedido',picking:'Picking'};
 function switchTab(t){
   tab=t;
-  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist','cobertura','picking'].forEach(v=>{
+  ['contagem','estoque','entrada','baixa','vagas','cadastro','salvos','distribuicao','diventrada','rdist','pedido','cobertura','picking'].forEach(v=>{
     const sec=$('#view-'+v);if(sec)sec.style.display=t===v?'':'none';
     const nv=$('#nav-'+v);if(nv)nv.classList.toggle('on',t===v);
   });
@@ -838,6 +881,7 @@ function switchTab(t){
   else if(t==='distribuicao'){renderDist();}
   else if(t==='diventrada'){renderDivEnt();}
   else if(t==='rdist'){renderRdist();}
+  else if(t==='pedido'){pedInit();}
   else if(t==='cobertura'){cobInit();}
   else if(t==='picking'){renderPick();}
   else focusScan();
@@ -2135,6 +2179,115 @@ function parseStorePdf(lines){
   return {map:map,info:{}};
 }
 
+/* ===================== PEDIDO (SUGESTÃO) ===================== */
+let PED={loja:'',days:15,vendas:null,vInfo:{},rows:[]};
+function pedInit(){const sel=$('#ped-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}}
+function pedForn(cod){return ((byCod[cod]||{}).forn)||'';}
+function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const res=parseVendasHtml(String(r.result));PED.vendas=res.map;PED.vInfo=res.info;PED.days=res.days;
+    pedInit();const sel=$('#ped-store');if(sel&&res.store)sel.value=res.store;if($('#ped-days'))$('#ped-days').value=res.days;
+    const n=Object.keys(res.map).length,tot=Object.keys(res.map).reduce((a,k)=>a+res.map[k],0);
+    const lojaNm=(FIXED_STORES.find(a=>a[0]===res.store)||[null,'(não identificada — selecione)'])[1];
+    $('#ped-vinfo').innerHTML='<b>'+fmt(n)+'</b> produtos vendidos · <b>'+fmt(tot)+'</b> un · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'');
+    toast('Vendas carregadas','ok');
+  }catch(e){toast('Não consegui ler o arquivo de vendas: '+e.message,'err');}};
+  r.readAsText(f,'utf-8');ev.target.value='';
+}
+function pedGerar(){
+  if(!PED.vendas){toast('Suba o arquivo de vendas primeiro','warn');return;}
+  const store=($('#ped-store')||{}).value||'';if(!store){toast('Selecione a loja','warn');return;}
+  const days=Math.max(1,+($('#ped-days')||{}).value||15);
+  const estD=Math.max(0,+($('#ped-estq')||{}).value||15),leadD=Math.max(0,+($('#ped-lead')||{}).value||7);
+  const alvoD=estD+leadD;PED.loja=store;PED.alvoD=alvoD;
+  const rows=[];
+  Object.keys(PED.vendas).forEach(cod=>{
+    const v=PED.vendas[cod]||0;if(v<=0)return;
+    const rate=v/days;const demanda=rate*alvoD;const estLoja=cobStockOf(cod,store);
+    const nec=Math.max(0,Math.ceil(demanda-estLoja));if(nec<=0)return;
+    const cd=saldoOf(cod);
+    rows.push({cod:cod,ean:cobEan(cod),desc:cobDesc(cod),forn:pedForn(cod),v:v,estLoja:estLoja,cd:cd,nec:nec,pedido:nec,manual:false});
+  });
+  rows.sort((a,b)=>{const fa=(a.forn||'~').toLowerCase(),fb=(b.forn||'~').toLowerCase();if(fa!==fb)return fa<fb?-1:1;return (a.desc||'').localeCompare(b.desc||'');});
+  PED.rows=rows;pedRender();
+}
+function pedRowCalc(r){const atende=Math.min(r.pedido,r.cd);const comprar=Math.max(0,r.pedido-r.cd);return {atende:atende,comprar:comprar};}
+function pedRender(){
+  const rows=PED.rows||[];$('#ped-result-card').style.display='';
+  let tPed=0,tAt=0,tCom=0,nCom=0;
+  rows.forEach(r=>{const c=pedRowCalc(r);tPed+=r.pedido;tAt+=c.atende;tCom+=c.comprar;if(c.comprar>0)nCom++;});
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
+  $('#ped-sub').textContent=lojaNm+' · alvo '+PED.alvoD+' dias · '+rows.length+' itens';
+  function kpi(l,v,bg,bd,cl){return '<div style="flex:1;min-width:130px;background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:10px 14px"><div style="font-size:11.5px;color:'+cl+'">'+l+'</div><div style="font-size:22px;font-weight:800;color:'+cl+'">'+fmt(v)+'</div></div>';}
+  $('#ped-kpis').innerHTML=
+    kpi('Pedido total',tPed,'#eef4ff','#d4e2ff','#0b2a66')+
+    kpi('Atende do CD',tAt,'#eafaef','#c7ecd2','#13602f')+
+    kpi('Comprar',tCom,'#fff7e6','#f0dcb4','#7a4b00')+
+    kpi('Itens p/ comprar',nCom,'#f4f6fa','var(--line2)','#555');
+  if(!rows.length){$('#ped-body').innerHTML='<div class="empty" style="padding:24px">Nenhum item sugerido. Gere a sugestão ou adicione itens.</div>';return;}
+  const body=rows.map((r,i)=>{const c=pedRowCalc(r);
+    return '<tr>'
+      +'<td class="mono" style="color:var(--muted)">'+distEscAttr(r.ean||r.cod||'—')+'</td>'
+      +'<td>'+distEscAttr(r.desc||'(sem descrição)')+(r.manual?' <span class="badge b-info" style="font-size:10px">add</span>':'')+'</td>'
+      +'<td style="font-size:12px;color:var(--muted)">'+distEscAttr(r.forn||'—')+'</td>'
+      +'<td class="r num">'+fmt(r.v)+'</td>'
+      +'<td class="r num">'+fmt(r.estLoja)+'</td>'
+      +'<td class="r num" style="color:var(--muted)">'+fmt(r.cd)+'</td>'
+      +'<td class="r"><input class="qty-in" type="number" min="0" value="'+r.pedido+'" onchange="pedSetQty('+i+',this.value)"></td>'
+      +'<td class="r num" style="color:var(--ok,#13602f)">'+fmt(c.atende)+'</td>'
+      +'<td class="r num" style="color:'+(c.comprar>0?'var(--warn)':'var(--muted)')+'">'+fmt(c.comprar)+'</td>'
+      +'<td class="r"><button class="btn sm gho dgr" onclick="pedDelRow('+i+')">x</button></td>'
+      +'</tr>';}).join('');
+  $('#ped-body').innerHTML='<table><thead><tr><th>Cód. Barras</th><th>Descrição</th><th>Fornecedor</th><th class="r">Vendas</th><th class="r">Estq loja</th><th class="r">CD</th><th class="r">Pedido</th><th class="r">Atende</th><th class="r">Comprar</th><th></th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+function pedSetQty(i,v){if(!PED.rows[i])return;PED.rows[i].pedido=Math.max(0,parseInt(v)||0);pedRender();}
+function pedDelRow(i){PED.rows.splice(i,1);pedRender();}
+function pedAddItem(){
+  const raw=(($('#ped-add-cod')||{}).value||'').trim();const q=Math.max(0,parseInt(($('#ped-add-qtd')||{}).value)||0);
+  if(!raw||!q){toast('Informe o código e a quantidade','warn');return;}
+  const p=lookup(raw);const cod=p?(p.cod||raw):raw;
+  const ex=PED.rows.find(r=>r.cod===cod);
+  if(ex){ex.pedido+=q;}
+  else{PED.rows.unshift({cod:cod,ean:p?cobEan(cod):raw,desc:p?cobDesc(cod):'(fora do cadastro)',forn:p?pedForn(cod):'',v:0,estLoja:p?cobStockOf(cod,PED.loja):0,cd:p?saldoOf(cod):0,nec:q,pedido:q,manual:true});}
+  if($('#ped-add-cod'))$('#ped-add-cod').value='';if($('#ped-add-qtd'))$('#ped-add-qtd').value='';
+  pedRender();
+}
+function pedExportDist(){
+  const rows=(PED.rows||[]).map(r=>({r:r,c:pedRowCalc(r)})).filter(x=>x.c.atende>0);
+  if(!rows.length){toast('Nada para enviar (CD sem estoque dos itens).','warn');return;}
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
+  const aoa=[['Codigo de Barras','Cod. Produto','Descricao','Fornecedor','Qtde Pedido','Atende CD']];
+  rows.forEach(x=>aoa.push([x.r.ean||'',x.r.cod,x.r.desc,x.r.forn,x.r.pedido,x.c.atende]));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:12},{wch:42},{wch:28},{wch:11},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Pedido');
+  XLSX.writeFile(wb,'pedido_'+slug(lojaNm)+'_'+stamp()+'.xlsx');toast('Pedido (distribuição) gerado','ok');
+}
+async function pedSalvar(){
+  if(!PED.loja){toast('Gere a sugestão primeiro','warn');return;}
+  const rows=(PED.rows||[]).filter(r=>r.pedido>0);
+  if(!rows.length){toast('Pedido vazio — nada a salvar','warn');return;}
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
+  const cur=DIST&&DIST.demand&&DIST.demand[PED.loja];const temItens=cur&&Object.keys(cur).filter(c=>cur[c]>0).length;
+  if(temItens&&!confirm('A loja '+lojaNm+' já tem um pedido na Distribuição ('+temItens+' itens). Substituir pelo pedido atual?'))return;
+  const map={};rows.forEach(r=>{map[r.cod]=(map[r.cod]||0)+r.pedido;});
+  if(!DIST.demand)DIST.demand={};DIST.demand[PED.loja]=map;
+  if(!DIST.info)DIST.info={};rows.forEach(r=>{if((r.desc||r.ean)&&!(byCod[r.cod])&&!DIST.info[r.cod])DIST.info[r.cod]={desc:r.desc||'',ean:r.ean||''};});
+  await persistDist();
+  if(typeof renderDistLojas==='function')renderDistLojas();
+  if(typeof renderDist==='function')renderDist();
+  toast('Pedido salvo para '+lojaNm+'. Já aparece em "Distribuição" — sem precisar de PDF.','ok');
+}
+function pedExportCompra(){
+  const rows=(PED.rows||[]).map(r=>({r:r,c:pedRowCalc(r)})).filter(x=>x.c.comprar>0);
+  if(!rows.length){toast('Nada para comprar — o CD cobre todo o pedido.','ok');return;}
+  rows.sort((a,b)=>{const fa=(a.r.forn||'~').toLowerCase(),fb=(b.r.forn||'~').toLowerCase();if(fa!==fb)return fa<fb?-1:1;return (a.r.desc||'').localeCompare(b.r.desc||'');});
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
+  const aoa=[['Fornecedor','Codigo de Barras','Cod. Produto','Descricao','Comprar']];
+  rows.forEach(x=>aoa.push([x.r.forn||'(sem fornecedor)',x.r.ean||'',x.r.cod,x.r.desc,x.c.comprar]));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:30},{wch:16},{wch:12},{wch:42},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Compra');
+  XLSX.writeFile(wb,'compra_'+slug(lojaNm)+'_'+stamp()+'.xlsx');toast('Pedido de compra (por fornecedor) gerado','ok');
+}
+
 /* ===================== COBERTURA DO PEDIDO ===================== */
 let COB={vendas:null,vInfo:{},pedido:null,pInfo:{},rows:null,storeDet:'',days:15,dIni:'',dFim:''};
 function cobInit(){const sel=$('#cob-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}}
@@ -2293,7 +2446,10 @@ function renderDistLojas(){
     const acts=busy?'<span class="badge b-info">lendo…</span>':('<button class="lk" onclick="distPick(\''+s.id+'\')">anexar</button>'+(itens?' <button class="lk dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':''));
     const ped=itens?'<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span>':'<span class="badge b-mut">sem arquivo</span>';
     return '<div class="pctrow"><span class="nm">'+distEscAttr(s.name)+'</span><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span><span class="ped">'+ped+'</span><span class="act">'+acts+'</span></div>';}).join('');
-  el.innerHTML='<div class="pctlist">'+html+'</div>';
+  const nLoja=DIST.stores.length;const comPed=DIST.stores.filter(s=>{const d=DIST.demand[s.id]||{};return Object.keys(d).some(c=>d[c]>0);}).length;
+  const pronto=comPed>=nLoja;
+  const banner='<div style="margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;'+(pronto?'background:#eafaef;border:1px solid #c7ecd2;color:#13602f':'background:#fff7e6;border:1px solid #f0dcb4;color:#7a4b00')+'">'+(pronto?'✓ ':'⏳ ')+comPed+' de '+nLoja+' lojas enviaram o pedido'+(pronto?' — pronto para distribuir.':' — a distribuição ideal é só depois que as '+nLoja+' enviarem.')+'</div>';
+  el.innerHTML=banner+'<div class="pctlist">'+html+'</div>';
   updateDistSum();
 }
 function fillDistLojaSel(){const sel=$('#dist-loja-sel');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas (resumo)</option>'+DIST.stores.map(s=>'<option value="'+s.id+'">'+distEscAttr(s.name)+'</option>').join('');if(cur)sel.value=cur;}
@@ -2364,6 +2520,8 @@ function distSnapshotData(){
 }
 async function distFinalizar(){
   if(!distCodes().length){toast('Não há pedidos para finalizar','warn');return;}
+  const nLoja=DIST.stores.length;const comPed=DIST.stores.filter(s=>{const d=DIST.demand[s.id]||{};return Object.keys(d).some(c=>d[c]>0);}).length;
+  if(comPed<nLoja){if(!confirm('Atenção: só '+comPed+' de '+nLoja+' lojas enviaram o pedido.\n\nO ideal é distribuir só quando todas as '+nLoja+' tiverem enviado. Distribuir mesmo assim?'))return;}
   if(!confirm('Finalizar esta distribuição e salvar no histórico?'))return;
   const data=distSnapshotData();const id='d'+Date.now();
   const itens=data.rows.length,distribuido=data.rows.reduce((a,r)=>a+r.dist,0),comprar=data.rows.reduce((a,r)=>a+r.comprar,0);
