@@ -2185,6 +2185,8 @@ function pedInit(){const sel=$('#ped-store');if(sel&&!sel.options.length){sel.in
 function pedForn(cod){return ((byCod[cod]||{}).forn)||'';}
 function pedCusto(cod){return (((PED.vInfo||{})[cod]||{}).custo)||((byCod[cod]||{}).custo)||0;}
 function pedVenda(cod){return (((PED.vInfo||{})[cod]||{}).venda)||((byCod[cod]||{}).venda)||0;}
+function pedIsAdidas(r){const p=byCod[(r&&r.cod)||'']||{};const hay=(((r&&r.forn)||p.forn||'')+' '+((r&&r.desc)||p.desc||'')).toLowerCase();return hay.indexOf('adidas')>=0;}
+function pedMarkup(r){return pedIsAdidas(r)?2.0:2.5;}
 function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const res=parseVendasHtml(String(r.result));PED.vendas=res.map;PED.vInfo=res.info;PED.days=res.days;
     pedInit();const sel=$('#ped-store');if(sel&&res.store)sel.value=res.store;if($('#ped-days'))$('#ped-days').value=res.days;
@@ -2215,8 +2217,10 @@ function pedGerar(){
 function pedRowCalc(r){const atende=Math.min(r.pedido,r.cd);const comprar=Math.max(0,r.pedido-r.cd);return {atende:atende,comprar:comprar};}
 function pedRender(){
   const rows=PED.rows||[];$('#ped-result-card').style.display='';
-  let tPed=0,tAt=0,tCom=0,nCom=0,vCusto=0,vVenda=0;
-  rows.forEach(r=>{const c=pedRowCalc(r);tPed+=r.pedido;tAt+=c.atende;tCom+=c.comprar;if(c.comprar>0)nCom++;vCusto+=(r.custo||0)*r.pedido;vVenda+=(r.venda||0)*r.pedido;});
+  let tPed=0,tAt=0,tCom=0,nCom=0,vCusto=0,vVenda=0,nAdi=0,nDem=0;
+  rows.forEach(r=>{const c=pedRowCalc(r);tPed+=r.pedido;tAt+=c.atende;tCom+=c.comprar;if(c.comprar>0)nCom++;
+    const mk=pedMarkup(r);vCusto+=(r.custo||0)*r.pedido;vVenda+=(r.custo||0)*mk*r.pedido;
+    if(r.pedido>0){if(pedIsAdidas(r))nAdi++;else nDem++;}});
   const lojaNm=(FIXED_STORES.find(a=>a[0]===PED.loja)||[null,PED.loja])[1];
   $('#ped-sub').textContent=lojaNm+' · alvo '+PED.alvoD+' dias · '+rows.length+' itens';
   function kpi(l,v,bg,bd,cl){return '<div style="flex:1;min-width:130px;background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:10px 14px"><div style="font-size:11.5px;color:'+cl+'">'+l+'</div><div style="font-size:22px;font-weight:800;color:'+cl+'">'+fmt(v)+'</div></div>';}
@@ -2227,7 +2231,8 @@ function pedRender(){
     kpi('Comprar',tCom,'#fff7e6','#f0dcb4','#7a4b00')+
     kpi('Itens p/ comprar',nCom,'#f4f6fa','var(--line2)','#555')+
     kpiM('Custo total do pedido',vCusto,'#f0edff','#ddd4ff','#3a2a7a')+
-    kpiM('Valor de venda total',vVenda,'#e9f6fb','#c4e6f0','#0a5a73');
+    kpiM('Valor de venda total',vVenda,'#e9f6fb','#c4e6f0','#0a5a73')+
+    '<div style="flex-basis:100%;font-size:11.5px;color:var(--muted);padding:2px 4px">Valor de venda = custo × markup · <b>Adidas (2,0):</b> '+nAdi+' itens · <b>demais (2,5):</b> '+nDem+' itens</div>';
   if(!rows.length){$('#ped-body').innerHTML='<div class="empty" style="padding:24px">Nenhum item sugerido. Gere a sugestão ou adicione itens.</div>';return;}
   const body=rows.map((r,i)=>{const c=pedRowCalc(r);
     return '<tr>'
