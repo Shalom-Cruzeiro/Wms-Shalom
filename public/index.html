@@ -2236,7 +2236,11 @@ function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)retur
     pedInit();const sel=$('#ped-store');if(sel&&res.store)sel.value=res.store;if($('#ped-days'))$('#ped-days').value=res.days;
     const n=Object.keys(res.map).length,tot=Object.keys(res.map).reduce((a,k)=>a+res.map[k],0);
     const lojaNm=(FIXED_STORES.find(a=>a[0]===res.store)||[null,'(não identificada — selecione)'])[1];
-    $('#ped-vinfo').innerHTML='<b>'+fmt(n)+'</b> produtos vendidos · <b>'+fmt(tot)+'</b> un · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'');
+    const dg=res.diag||{};
+    let diagTxt='';
+    if(dg.comCusto>0){diagTxt='<span style="color:var(--ok,#13602f)">✓ custo lido'+(dg.custoNome?(' ("'+distEscAttr(dg.custoNome)+'")'):(dg.custoAssumido?' (coluna assumida)':''))+' — ex.: '+fmtBRL(dg.custoAmostra||0)+'</span>';}
+    else{diagTxt='<span style="color:var(--err,#b42318)">⚠ não encontrei valor de custo neste arquivo'+(dg.custoNome?(' (coluna "'+distEscAttr(dg.custoNome)+'" veio zerada)'):'')+' — o custo/venda ficará R$ 0,00. Verifique se o relatório do Microvix inclui a coluna de custo.</span>';}
+    $('#ped-vinfo').innerHTML='<b>'+fmt(n)+'</b> produtos vendidos · <b>'+fmt(tot)+'</b> un · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'')+'<br>'+diagTxt;
     toast('Vendas carregadas','ok');
   }catch(e){toast('Não consegui ler o arquivo de vendas: '+e.message,'err');}};
   r.readAsText(f,'utf-8');ev.target.value='';
@@ -2377,19 +2381,43 @@ function parseVendasHtml(text){
   const dts=txt.match(/\d{2}\/\d{2}\/\d{4}/g)||[];let dIni=dts[0]||'',dFim=dts[1]||'',days=15;
   if(dIni&&dFim)days=cobDiasEntre(dIni,dFim);
   const trs=Array.prototype.slice.call(doc.querySelectorAll('tr'));
-  let iCod=0,iDesc=1,iEan=3,iQty=5,iCusto=-1,iVenda=-1;
-  for(var t=0;t<trs.length;t++){const cs=Array.prototype.map.call(trs[t].children,td=>td.textContent.trim().toLowerCase());
-    if(cs[0]==='codigo'||cs[0]==='código'){const u=cs.findIndex(x=>x==='un'||x.indexOf('un')===0);if(u>=0)iQty=u+1;const e=cs.findIndex(x=>x.indexOf('barras')>=0);if(e>=0)iEan=e;const cu=cs.findIndex(x=>x.indexOf('custo')>=0);if(cu>=0)iCusto=cu;const vn=cs.findIndex(x=>x.indexOf('venda')>=0);if(vn>=0)iVenda=vn;break;}}
-  const map={},info={};
+  let iCod=0,iDesc=1,iEan=3,iQty=5,iCusto=-1,iVenda=-1,hdr=-1,custoNome='',vendaNome='',custoAssumido=false,vendaAssumido=false;
+  for(var t=0;t<trs.length;t++){
+    const cs=Array.prototype.map.call(trs[t].children,td=>td.textContent.trim().toLowerCase());
+    if(!cs.length)continue;
+    const hasCod=cs.some(x=>x==='codigo'||x==='código'||x==='cod.'||x==='cód.'||x.indexOf('codigo')===0||x.indexOf('código')===0);
+    const hasDesc=cs.some(x=>x.indexOf('descri')>=0);
+    const hasBar=cs.some(x=>x.indexOf('barras')>=0);
+    if(hasCod&&(hasDesc||hasBar)){
+      hdr=t;
+      const orig=Array.prototype.map.call(trs[t].children,td=>td.textContent.trim());
+      const f=pred=>{for(let i=0;i<cs.length;i++){if(pred(cs[i],i))return i;}return -1;};
+      const ic=f(x=>x==='codigo'||x==='código'||x==='cod.'||x==='cód.'||(x.indexOf('cod')===0&&x.indexOf('barra')<0)); if(ic>=0)iCod=ic;
+      const idd=f(x=>x.indexOf('descri')>=0); if(idd>=0)iDesc=idd;
+      const e=f(x=>x.indexOf('barra')>=0); if(e>=0)iEan=e;
+      const qt=f(x=>x.indexOf('qtd')>=0||x.indexOf('quant')>=0); const u=f(x=>x==='un'||x.indexOf('un')===0);
+      if(qt>=0)iQty=qt; else if(u>=0)iQty=u+1;
+      const cu=f(x=>x.indexOf('custo')>=0); if(cu>=0){iCusto=cu;custoNome=orig[cu]||'';}
+      const vn=f(x=>x.indexOf('venda')>=0&&x.indexOf('devol')<0&&x.indexOf('qtd')<0&&x.indexOf('quant')<0); if(vn>=0){iVenda=vn;vendaNome=orig[vn]||'';}
+      break;
+    }
+  }
+  // fallback para o layout padrão do Microvix (Custo = col 6, Pr. Venda = col 9) quando o cabeçalho não nomeou as colunas
+  if(iCusto<0){iCusto=6;custoAssumido=true;}
+  if(iVenda<0){iVenda=9;vendaAssumido=true;}
+  const map={},info={};let custoAmostra=0,vendaAmostra=0,comCusto=0;
   trs.forEach(tr=>{const cs=Array.prototype.map.call(tr.children,td=>td.textContent.trim());if(cs.length<=iQty)return;
     const cod=cleanCode(cs[iCod]);if(!/^\d+$/.test(cod))return;
     const q=cobVNum(cs[iQty]);map[cod]=(map[cod]||0)+q;
     const d=cs[iDesc]||'',e=cleanCode(cs[iEan]||'');
     const cu=(iCusto>=0&&cs.length>iCusto)?cobMoney(cs[iCusto]):0;
     const vn=(iVenda>=0&&cs.length>iVenda)?cobMoney(cs[iVenda]):0;
+    if(cu>0){comCusto++;if(!custoAmostra)custoAmostra=cu;}
+    if(vn>0&&!vendaAmostra)vendaAmostra=vn;
     if(!info[cod])info[cod]={desc:d,ean:e,custo:cu,venda:vn};
     else{if(cu&&!info[cod].custo)info[cod].custo=cu;if(vn&&!info[cod].venda)info[cod].venda=vn;}});
-  return {store,emp,days,dIni,dFim,map,info};
+  const diag={iCusto,iVenda,custoNome,vendaNome,custoAssumido,vendaAssumido,custoAmostra,vendaAmostra,comCusto,hdr};
+  return {store,emp,days,dIni,dFim,map,info,diag};
 }
 function onCobVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const res=parseVendasHtml(String(r.result));COB.vendas=res.map;COB.vInfo=res.info;COB.storeDet=res.store;COB.days=res.days;COB.dIni=res.dIni;COB.dFim=res.dFim;
