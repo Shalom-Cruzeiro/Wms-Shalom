@@ -86,6 +86,16 @@ async function seedUsers() {
     const u = pair.slice(0, i), p = pair.slice(i + 1);
     if (u && !(await getUserHash(u))) await setUser(u, bcrypt.hashSync(p, 10));
   }
+  // Um login por loja (usuário = id da loja). Senha única provisória, trocável pela env SENHA_LOJAS.
+  // O usuário de cada loja = exatamente estes ids (minúsculos, sem acento).
+  const LOJAS = ['estacao','delrey','betim','outlet','minas','via','itau','boulevard','ipatinga','cidade','savassi','valadares','itabira'];
+  const senhaLoja = process.env.SENHA_LOJAS || 'loja2026';
+  for (const u of LOJAS) {
+    if (!(await getUserHash(u))) {
+      await setUser(u, bcrypt.hashSync(senhaLoja, 10));
+      console.log('Usuário de loja criado:', u);
+    }
+  }
 }
 
 /* ----------------- auth ----------------- */
