@@ -239,6 +239,19 @@
   .vf-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
   #v-code,#v-vaga{font-size:18px;padding:12px}
   @media(max-width:720px){.pctrow .ped{width:auto}.pctrow .act{width:auto}}
+  .pedrow{border-top:1px solid var(--line2);padding:9px 14px;display:flex;flex-direction:column;gap:5px}
+  .pedrow .l1{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .pedrow .l1 .nm{font-size:13px;font-weight:600}
+  .pedrow .l1 .rt{margin-left:auto;display:flex;align-items:center;gap:5px}
+  .pedrow .l1 .rt input{width:54px;text-align:center;font-family:var(--mono);font-size:12px;padding:5px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);outline:none}
+  .pedrow .l1 .rt .pc{font-size:11px;color:var(--soft)}
+  .pedrow .l2{display:flex;flex-wrap:wrap;align-items:center;gap:2px 7px;font-size:11.5px;color:var(--muted)}
+  .pedrow .l2 .v{white-space:nowrap}
+  .pedrow .l2 .v b{color:var(--ink);font-weight:700}
+  .pedrow .l2 .sep{color:var(--line)}
+  .pedrow .l2 .acts{margin-left:auto;display:flex;gap:12px}
+  .pedrow.miss{background:#fff5f5}
+  .pedrow.old{background:#fffaf0}
   .sb b{font-family:var(--mono)}
   .badge.b-warn{background:var(--warn-bg);color:var(--warn)}
   select.sel{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--ui);font-size:12.5px;background:#fff;outline:none}
@@ -2523,21 +2536,23 @@ function renderPedHist(){
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
   let html='<div class="pctcd"><span class="nm" style="font-weight:700;color:var(--brand-d)">CD — fica no estoque</span><input type="number" min="0" value="'+(+DIST.cdPct||0)+'" oninput="distSetCdPct(this.value)"><span class="pc">%</span><span class="ped" style="font-size:10.5px;color:var(--brand-d)">reserva do CD</span><span class="act"></span></div>';
+  const sep='<span class="sep">·</span>';
   html+=DIST.stores.map(s=>{const d=DIST.demand[s.id]||{};const itens=Object.keys(d).filter(c=>d[c]>0).length;const un=Object.values(d).reduce((a,b)=>a+(+b||0),0);const busy=distBusy===s.id;const meta=(DIST.pedMeta&&DIST.pedMeta[s.id])||null;const hist=(DIST.pedHist&&DIST.pedHist[s.id])||[];const fez=itens>0;
     const linkHist=hist.length?'<button class="lk" onclick="distVerHistorico(\''+s.id+'\')">histórico ('+hist.length+')</button>':'';
-    const linkRem=hist.length?' <button class="lk dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':'';
+    const linkRem=hist.length?'<button class="lk dgr" onclick="distClearPedido(\''+s.id+'\')">remover</button>':'';
     const acts=busy?'<span class="badge b-info">lendo…</span>':(linkHist+linkRem);
-    let ped,nmStyle='',rowStyle='';
-    if(fez){const m=meta||{};const q=m.savedAt?('salvo '+pedQuando(m.savedAt)+(m.by?(' · '+distEscAttr(m.by)):'')):'';
-      const vals='custo '+fmtBRL(m.custoTotal||0)+' · venda '+fmtBRL(m.vendaTotal||0);
-      ped='<span class="badge b-ok">'+itens+' itens · '+fmt(un)+' un</span><span style="display:block;font-size:10.5px;color:var(--muted);margin-top:2px">'+vals+(q?(' · '+q):'')+'</span>';}
-    else if(hist.length){const h0=hist[0]||{};const m=pedRecMeta(h0);
-      const vals='custo '+fmtBRL(m.custoTotal||0)+' · venda '+fmtBRL(m.vendaTotal||0);
-      ped='<span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-weight:700">⚠ sem pedido nesta semana</span><span style="display:block;font-size:10.5px;color:#7a4b00;margin-top:2px">último: '+m.itens+' itens · '+vals+' · '+pedQuando(m.savedAt)+' — use "histórico" p/ carregar</span>';
-      nmStyle='color:#7a4b00;font-weight:700';rowStyle=' style="background:#fffaf0"';}
-    else{ped='<span class="badge" style="background:#fde8e8;color:#b42318;border:1px solid #f5c2c2;font-weight:700">✗ não fez o pedido</span>';
-      nmStyle='color:#b42318;font-weight:700';rowStyle=' style="background:#fff5f5"';}
-    return '<div class="pctrow"'+rowStyle+'><span class="nm" style="'+nmStyle+'">'+distEscAttr(s.name)+'</span><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span><span class="ped">'+ped+'</span><span class="act">'+acts+'</span></div>';}).join('');
+    let badge,info,cls='';
+    const valCells=m=>'<span class="v"><b>'+fmt(m.itens)+'</b> itens</span>'+sep+'<span class="v"><b>'+fmt(m.un)+'</b> un</span>'+sep+'<span class="v">custo <b>'+fmtBRL(m.custoTotal||0)+'</b></span>'+sep+'<span class="v">venda <b>'+fmtBRL(m.vendaTotal||0)+'</b></span>';
+    if(fez){const m=meta||{};badge='<span class="badge b-ok">✓ pedido da semana</span>';
+      info=valCells(m)+(m.savedAt?(sep+'<span class="v">salvo '+pedQuando(m.savedAt)+(m.by?(' · '+distEscAttr(m.by)):'')+'</span>'):'');}
+    else if(hist.length){const m=pedRecMeta(hist[0]||{});badge='<span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-weight:700">⚠ sem pedido nesta semana</span>';cls=' old';
+      info='<span class="v" style="color:#7a4b00">último '+pedQuando(m.savedAt)+':</span>'+sep+valCells(m);}
+    else{badge='<span class="badge" style="background:#fde8e8;color:#b42318;border:1px solid #f5c2c2;font-weight:700">✗ não fez o pedido</span>';cls=' miss';
+      info='<span class="v">sem pedido salvo</span>';}
+    return '<div class="pedrow'+cls+'">'
+      +'<div class="l1"><span class="nm">'+distEscAttr(s.name)+'</span>'+badge+'<span class="rt"><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span></span></div>'
+      +'<div class="l2">'+info+'<span class="acts">'+acts+'</span></div>'
+      +'</div>';}).join('');
   const nLoja=DIST.stores.length;const comPed=DIST.stores.filter(s=>{const d=DIST.demand[s.id]||{};return Object.keys(d).some(c=>d[c]>0);}).length;
   const pronto=comPed>=nLoja;
   const banner='<div style="margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;'+(pronto?'background:#eafaef;border:1px solid #c7ecd2;color:#13602f':'background:#fff7e6;border:1px solid #f0dcb4;color:#7a4b00')+'">'+(pronto?'✓ ':'⏳ ')+comPed+' de '+nLoja+' lojas enviaram o pedido'+(pronto?' — pronto para distribuir.':' — a distribuição ideal é só depois que as '+nLoja+' enviarem.')+'</div>';
