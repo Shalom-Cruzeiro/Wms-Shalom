@@ -2018,13 +2018,28 @@ function applyPedRecs(recs){
 }
 async function fetchPedRecs(){
   const keys=FIXED_STORES.map(a=>K_PED(a[0]));
-  const m=await store.getMulti(keys); // 1 requisição só
-  if(m.ok)return keys.map(k=>({ok:true,value:m.values[k]}));
+  const allKeys=keys.concat(['inv_phist_idx']);
+  const m=await store.getMulti(allKeys); // 1 requisição só (pedidos + histórico de picking)
+  if(m.ok){if(Array.isArray(m.values['inv_phist_idx']))PICKHIST=m.values['inv_phist_idx'];return keys.map(k=>({ok:true,value:m.values[k]}));}
   // servidor antigo (sem /api/kv-multi) ou falha: cai para leitura individual resiliente
-  return await Promise.all(keys.map(k=>store.getSafe(k)));
+  const safe=await Promise.all(keys.map(k=>store.getSafe(k)));
+  try{const ph=await store.getSafe(K_PHIST);if(ph.ok&&Array.isArray(ph.value))PICKHIST=ph.value;}catch(e){}
+  return safe;
+}
+function distSepStatus(sid,name){
+  const metas=PICKHIST||[];
+  for(let i=0;i<metas.length;i++){const m=metas[i];if(!m||m.status!=='finalizado')continue;
+    let cov=false,done=0,total=0;
+    if(m.porLoja&&m.porLoja[sid]){cov=true;done=+m.porLoja[sid].done||0;total=+m.porLoja[sid].total||0;}
+    else if(m.storeIds&&m.storeIds.indexOf(sid)>=0){cov=true;}
+    else if(m.lojas&&name&&m.lojas.indexOf(name)>=0){cov=true;}
+    if(cov)return {separado:true,done:done,total:total,ts:m.ts||0};
+  }
+  return {separado:false};
 }
 const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['outlet','Outlet'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
 let DIST={cdPct:0,stores:[],demand:{}};
+let PICKHIST=[]; // índice dos pickings salvos (para marcar "pedido separado" na Distribuição)
 let distStep=1, distFileTarget=null;
 let distOnlyStock=false;
 function distToggleStock(){distOnlyStock=!distOnlyStock;renderDistE1();}
@@ -2243,7 +2258,7 @@ function parseStorePdf(lines){
 }
 
 /* ===================== PEDIDO (SUGESTÃO) ===================== */
-let PED={loja:'',days:15,vendas:null,vInfo:{},rows:[]};
+let PED={loja:'',days:15,vendas:null,vInfo:{},rows:[],editing:null};
 function pedInit(){const sel=$('#ped-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}
   if(sel&&LOJA_USER&&!sel.value){sel.value=LOJA_USER;}}
 function pedForn(cod){return ((byCod[cod]||{}).forn)||'';}
@@ -2270,7 +2285,7 @@ function pedGerar(){
   const store=($('#ped-store')||{}).value||'';if(!store){toast('Selecione a loja','warn');return;}
   const days=Math.max(1,+($('#ped-days')||{}).value||15);
   const estD=Math.max(0,+($('#ped-estq')||{}).value||15),leadD=Math.max(0,+($('#ped-lead')||{}).value||7);
-  const alvoD=estD+leadD;PED.loja=store;PED.alvoD=alvoD;
+  const alvoD=estD+leadD;PED.loja=store;PED.alvoD=alvoD;PED.editing=null;
   const rows=[];
   Object.keys(PED.vendas).forEach(cod=>{
     const v=PED.vendas[cod]||0;if(v<=0)return;
@@ -2320,10 +2335,31 @@ function pedRender(){
 function pedLimpar(){
   if(!(PED.rows&&PED.rows.length)){toast('O pedido já está vazio.','ok');return;}
   if(!confirm('Limpar o pedido atual e recomeçar? As quantidades e itens adicionados serão descartados (o arquivo de vendas continua carregado).'))return;
-  PED.rows=[];
+  PED.rows=[];PED.editing=null;
   const rc=$('#ped-result-card');if(rc)rc.style.display='none';
   if($('#ped-add-cod'))$('#ped-add-cod').value='';if($('#ped-add-qtd'))$('#ped-add-qtd').value='';
   toast('Pedido limpo. Clique em "Gerar sugestão" para recomeçar.','ok');
+}
+function pedEditarSalvo(storeId,idx){
+  idx=idx||0;
+  const hist=(DIST.pedHist&&DIST.pedHist[storeId])||[];
+  const rec=hist[idx];
+  if(!rec){toast('Pedido não encontrado','warn');return;}
+  const lojaNm=(FIXED_STORES.find(a=>a[0]===storeId)||[null,storeId])[1];
+  pedInit();
+  PED.loja=storeId;PED.days=rec.days||15;PED.alvoD=rec.alvoD||0;PED.vInfo=rec.info||{};
+  PED.editing={storeId:storeId,savedAt:rec.savedAt};
+  const custos=rec.custos||{};
+  PED.rows=Object.keys(rec.map||{}).map(cod=>{
+    const ri=(rec.info&&rec.info[cod])||{};
+    const custo=(custos[cod]!=null)?custos[cod]:pedCusto(cod);
+    return {cod:cod,ean:cobEan(cod)||ri.ean||'',desc:cobDesc(cod)||ri.desc||'',forn:pedForn(cod),v:0,estLoja:cobStockOf(cod,storeId),cd:saldoOf(cod),nec:rec.map[cod],pedido:rec.map[cod],manual:!byCod[cod],custo:custo,venda:0};
+  });
+  const sel=$('#ped-store');if(sel)sel.value=storeId;
+  if($('#ped-days'))$('#ped-days').value=PED.days;
+  switchTab('pedido');pedRender();
+  if($('#ped-vinfo'))$('#ped-vinfo').innerHTML='✏️ <b>Editando</b> o pedido salvo de <b>'+distEscAttr(lojaNm)+'</b> ('+pedQuando(rec.savedAt)+'). Ajuste e clique em <b>Salvar pedido no sistema</b> — salva por cima deste.';
+  toast('Pedido de '+lojaNm+' reaberto para edição','ok');
 }
 function pedSetQty(i,v){if(!PED.rows[i])return;PED.rows[i].pedido=Math.max(0,parseInt(v)||0);pedRender();}
 function pedDelRow(i){PED.rows.splice(i,1);pedRender();}
@@ -2356,13 +2392,19 @@ async function pedSalvar(){
   const rd=await store.getSafe(K_PED(PED.loja));
   if(!rd.ok){toast('Não consegui falar com o servidor agora — tente de novo em instantes (nada foi salvo).','err');return;}
   let hist=pedHistOf(rd.value);
-  const hoje=hist.length&&(Date.now()-((hist[0].savedAt)||0)<PED_WEEK_MS);
-  if(hoje&&!confirm('A loja '+lojaNm+' já salvou um pedido nesta semana. Salvar este como uma NOVA versão? (o anterior fica no histórico)'))return;
-  const map={},info={};let un=0,custoTotal=0,vendaTotal=0;
-  rows.forEach(r=>{map[r.cod]=(map[r.cod]||0)+r.pedido;un+=r.pedido;custoTotal+=(r.custo||0)*r.pedido;vendaTotal+=(r.custo||0)*pedMarkup(r)*r.pedido;
+  const editando=PED.editing&&PED.editing.storeId===PED.loja;
+  if(editando){
+    // Edição: salva POR CIMA da versão reaberta (remove a antiga e grava a nova no lugar)
+    hist=hist.filter(r=>(r.savedAt||0)!==PED.editing.savedAt);
+  }else{
+    const hoje=hist.length&&(Date.now()-((hist[0].savedAt)||0)<PED_WEEK_MS);
+    if(hoje&&!confirm('A loja '+lojaNm+' já salvou um pedido nesta semana. Salvar este como uma NOVA versão? (o anterior fica no histórico)'))return;
+  }
+  const map={},info={},custos={};let un=0,custoTotal=0,vendaTotal=0;
+  rows.forEach(r=>{map[r.cod]=(map[r.cod]||0)+r.pedido;custos[r.cod]=r.custo||0;un+=r.pedido;custoTotal+=(r.custo||0)*r.pedido;vendaTotal+=(r.custo||0)*pedMarkup(r)*r.pedido;
     if((r.desc||r.ean)&&!(byCod[r.cod]))info[r.cod]={desc:r.desc||'',ean:r.ean||''};});
   const rec={storeId:PED.loja,lojaNm:lojaNm,savedAt:Date.now(),by:(CURRENT_USER||''),days:PED.days||0,alvoD:PED.alvoD||0,
-    itens:Object.keys(map).length,un:un,custoTotal:custoTotal,vendaTotal:vendaTotal,map:map,info:info};
+    itens:Object.keys(map).length,un:un,custoTotal:custoTotal,vendaTotal:vendaTotal,map:map,info:info,custos:custos};
   hist.unshift(rec);if(hist.length>24)hist=hist.slice(0,24);
   const ok=await store.set(K_PED(PED.loja),{v:2,storeId:PED.loja,history:hist});
   if(!ok){toast('Não consegui salvar no servidor agora — tente de novo em instantes (nada foi enviado à Distribuição).','err');return;}
@@ -2371,7 +2413,8 @@ async function pedSalvar(){
   if(!DIST.pedHist)DIST.pedHist={};DIST.pedHist[PED.loja]=hist;
   if(!DIST.pedMeta)DIST.pedMeta={};DIST.pedMeta[PED.loja]=pedRecMeta(rec);
   if(!DIST.info)DIST.info={};Object.keys(info).forEach(c=>{if(!DIST.info[c])DIST.info[c]=info[c];});
-  toast('Pedido de '+lojaNm+' salvo. Abrindo a Distribuição…','ok');
+  const eraEdicao=editando;PED.editing=null;
+  toast('Pedido de '+lojaNm+(eraEdicao?' atualizado':' salvo')+'. Abrindo a Distribuição…','ok');
   switchTab('distribuicao');
 }
 function pedExportCompra(){
@@ -2576,10 +2619,10 @@ function renderPedHist(){
   const naSemana=feitos.filter(x=>(Date.now()-(x.last.savedAt||0))<PED_WEEK_MS).length;
   const sub=$('#pedhist-sub');if(sub)sub.textContent=naSemana+' de '+list.length+' lojas com pedido nesta semana';
   let rows=feitos.map(x=>{const m=x.last;const dentro=(Date.now()-(m.savedAt||0))<PED_WEEK_MS;
-    return '<tr'+(dentro?'':' style="background:#fffaf0"')+'><td>'+distEscAttr(x.name)+(dentro?'':' <span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-size:9.5px">fora da semana</span>')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.un)+'</td><td class="r">'+fmtBRL(m.custoTotal||0)+'</td><td class="r">'+fmtBRL(m.vendaTotal||0)+'</td><td style="font-size:12px;color:var(--muted)">'+(m.savedAt?pedQuando(m.savedAt):'—')+(m.by?(' · '+distEscAttr(m.by)):'')+(x.hist.length>1?(' · '+x.hist.length+' versões'):'')+'</td></tr>';}).join('');
-  rows+=faltam.map(x=>'<tr style="background:#fff5f5"><td style="color:#b42318;font-weight:700">'+distEscAttr(x.name)+'</td><td class="r" style="color:#b42318" colspan="5">✗ nunca salvou pedido</td></tr>').join('');
+    return '<tr'+(dentro?'':' style="background:#fffaf0"')+'><td>'+distEscAttr(x.name)+(dentro?'':' <span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-size:9.5px">fora da semana</span>')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.un)+'</td><td class="r">'+fmtBRL(m.custoTotal||0)+'</td><td class="r">'+fmtBRL(m.vendaTotal||0)+'</td><td style="font-size:12px;color:var(--muted)">'+(m.savedAt?pedQuando(m.savedAt):'—')+(m.by?(' · '+distEscAttr(m.by)):'')+(x.hist.length>1?(' · '+x.hist.length+' versões'):'')+'</td><td class="r"><button class="btn sm" onclick="pedEditarSalvo(\''+x.id+'\',0)">reabrir p/ editar</button></td></tr>';}).join('');
+  rows+=faltam.map(x=>'<tr style="background:#fff5f5"><td style="color:#b42318;font-weight:700">'+distEscAttr(x.name)+'</td><td class="r" style="color:#b42318" colspan="6">✗ nunca salvou pedido</td></tr>').join('');
   if(!feitos.length&&!faltam.length){body.innerHTML='<div class="empty" style="padding:24px">Nenhum pedido salvo ainda.</div>';return;}
-  body.innerHTML='<table><thead><tr><th>Loja</th><th class="r">Itens</th><th class="r">Un</th><th class="r">Custo</th><th class="r">Venda</th><th>Último salvo</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  body.innerHTML='<table><thead><tr><th>Loja</th><th class="r">Itens</th><th class="r">Un</th><th class="r">Custo</th><th class="r">Venda</th><th>Último salvo</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
@@ -2597,8 +2640,13 @@ function renderDistLojas(){
       info='<span class="v" style="color:#7a4b00">último '+pedQuando(m.savedAt)+':</span>'+sep+valCells(m);}
     else{badge='<span class="badge" style="background:#fde8e8;color:#b42318;border:1px solid #f5c2c2;font-weight:700">✗ não fez o pedido</span>';cls=' miss';
       info='<span class="v">sem pedido salvo</span>';}
+    let sepBadge='';
+    if(fez||hist.length){const sp=distSepStatus(s.id,s.name);
+      if(sp.separado){const incompleto=sp.total&&sp.done<sp.total;const cnt=sp.total?(' '+sp.done+'/'+sp.total):'';
+        sepBadge=' <span class="badge" style="background:'+(incompleto?'#fff3d6':'#eafaef')+';color:'+(incompleto?'#7a4b00':'#13602f')+';border:1px solid '+(incompleto?'#f0dcb4':'#c7ecd2')+';font-weight:700" title="separado no Picking">✓ pedido separado'+cnt+'</span>';}
+      else{sepBadge=' <span class="badge b-mut" style="font-weight:600" title="ainda não separado no Picking">a separar</span>';}}
     return '<div class="pedrow'+cls+'">'
-      +'<div class="l1"><span class="nm">'+distEscAttr(s.name)+'</span>'+badge+'<span class="rt"><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span></span></div>'
+      +'<div class="l1"><span class="nm">'+distEscAttr(s.name)+'</span>'+badge+sepBadge+'<span class="rt"><input type="number" min="0" value="'+(+s.pct||0)+'" oninput="distSetPct(\''+s.id+'\',this.value)"><span class="pc">%</span></span></div>'
       +'<div class="l2">'+info+'<span class="acts">'+acts+'</span></div>'
       +'</div>';}).join('');
   const nLoja=DIST.stores.length;const comPed=DIST.stores.filter(s=>{const d=DIST.demand[s.id]||{};return Object.keys(d).some(c=>d[c]>0);}).length;
@@ -3106,10 +3154,12 @@ async function pickSaveHist(status){
   if(!PICK.tasks.length)return;
   const done=PICK.tasks.filter(t=>t.status==='done').length;const falta=PICK.tasks.filter(t=>t.status!=='done').length;
   const lojas=[];PICK.tasks.forEach(t=>{if(lojas.indexOf(t.store)<0)lojas.push(t.store);});
+  const porLoja={};PICK.tasks.forEach(t=>{const k=t.sid||t.store;if(!porLoja[k])porLoja[k]={sid:t.sid||'',store:t.store||'',total:0,done:0};porLoja[k].total++;if(t.status==='done')porLoja[k].done++;});
+  const storeIds=PICK.storeIds||Object.keys(porLoja);
   const id=PICK.id||('p'+Date.now());PICK.id=id;
-  const meta={id:id,ts:PICK.ts||Date.now(),status:status,lojas:lojas,total:PICK.tasks.length,done:done,falta:falta};
+  const meta={id:id,ts:PICK.ts||Date.now(),status:status,lojas:lojas,total:PICK.tasks.length,done:done,falta:falta,storeIds:storeIds,porLoja:porLoja};
   try{await store.set('inv_phist_'+id,{meta:meta,tasks:PICK.tasks,idx:PICK.idx,storeIds:PICK.storeIds});
-    let idx=(await store.get(K_PHIST))||[];idx=idx.filter(m=>m.id!==id);idx.unshift(meta);if(idx.length>80)idx.length=80;await store.set(K_PHIST,idx);}catch(e){toast('Não consegui salvar: '+e.message,'err');}
+    let idx=(await store.get(K_PHIST))||[];idx=idx.filter(m=>m.id!==id);idx.unshift(meta);if(idx.length>80)idx.length=80;await store.set(K_PHIST,idx);PICKHIST=idx;}catch(e){toast('Não consegui salvar: '+e.message,'err');}
 }
 async function pickSalvarSair(){await pickSaveHist('andamento');PICK={id:null,tasks:[],idx:0,started:false,storeIds:null,ts:0};await persistPick();renderPick();toast('Picking salvo — veja em “Salvos” para continuar','ok');}
 async function pickFinalizar(){
