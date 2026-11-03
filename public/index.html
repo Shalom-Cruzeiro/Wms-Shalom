@@ -559,6 +559,7 @@
       <div class="hd"><h3>Lojas e percentuais</h3><span class="sub">cada loja envia o pedido pela tela "Pedido"; aqui você define o % de cada uma</span>
         <div class="right">
           <span class="sumbadge" id="dist-sum">soma 0%</span>
+          <button class="btn sm" id="dist-refresh" onclick="distAtualizarPedidos()">↻ Atualizar pedidos</button>
           <button class="btn sm" onclick="distDividirIgual()">Dividir igual</button>
           <button class="btn sm" onclick="distDividirVenda()" title="usa o % de venda líquida de cada loja; CD fica com 0%">Dividir pela média de venda</button>
           <button class="btn sm gho" onclick="document.getElementById('dist-vendas-file').click()">Importar vendas</button>
@@ -822,7 +823,8 @@ const store={
   async get(k){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{headers:authHeaders()});if(r.status===401){onAuthFail();return null;}const j=await r.json();return j.value;}catch(e){return null;}},
   async getSafe(k){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{headers:authHeaders()});if(r.status===401){onAuthFail();return {ok:false,value:null};}if(!r.ok)return {ok:false,value:null};const j=await r.json();return {ok:true,value:j.value};}catch(e){return {ok:false,value:null};}},
   async set(k,v){try{const r=await fetch('/api/kv/'+encodeURIComponent(k),{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({value:v})});if(r.status===401){onAuthFail();return false;}return r.ok;}catch(e){return false;}},
-  async del(k){try{await fetch('/api/kv/'+encodeURIComponent(k),{method:'DELETE',headers:authHeaders()});}catch(e){}}
+  async del(k){try{await fetch('/api/kv/'+encodeURIComponent(k),{method:'DELETE',headers:authHeaders()});}catch(e){}},
+  async getMulti(keys){try{const r=await fetch('/api/kv-multi',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({keys})});if(r.status===401){onAuthFail();return {ok:false,values:{}};}if(!r.ok)return {ok:false,values:{}};const j=await r.json();return {ok:true,values:(j&&j.values)||{}};}catch(e){return {ok:false,values:{}};}}
 };
 const K_CAT='inv_catalog_v2', K_SESS='inv_session_v2', K_HIST='inv_history_v1', K_BV='inv_base_version';
 const K_SALDO='inv_saldo_v1', K_MOV='inv_mov_v1', K_ALLOC='inv_alloc_v2', K_VAGAS='inv_vagas_v1';
@@ -2004,12 +2006,22 @@ function pedHistOf(val){if(!val)return [];if(Array.isArray(val.history))return v
 function pedRecMeta(r){return {savedAt:r.savedAt||0,by:r.by||'',days:r.days||0,itens:(r.itens!=null?r.itens:Object.keys(r.map||{}).length),un:(r.un!=null?r.un:Object.values(r.map||{}).reduce((x,y)=>x+(+y||0),0)),custoTotal:r.custoTotal||0,vendaTotal:r.vendaTotal||0};}
 function pedCurrentRec(hist){if(!hist||!hist.length)return null;const lim=Date.now()-PED_WEEK_MS;for(let i=0;i<hist.length;i++){if((hist[i].savedAt||0)>=lim)return hist[i];}return null;}
 function applyPedRecs(recs){
+  // recs[i] = {ok, value}. Em falha de leitura (ok=false) NÃO apaga o que já tem (evita o "pisca-pisca").
   if(!DIST.pedMeta)DIST.pedMeta={};if(!DIST.info)DIST.info={};if(!DIST.pedHist)DIST.pedHist={};
-  FIXED_STORES.forEach((a,i)=>{const id=a[0];const hist=pedHistOf(recs[i]);DIST.pedHist[id]=hist;
+  FIXED_STORES.forEach((a,i)=>{const id=a[0];const r=recs[i]||{ok:false};
+    if(!r.ok)return; // mantém o estado atual desta loja
+    const hist=pedHistOf(r.value);DIST.pedHist[id]=hist;
     const cur=pedCurrentRec(hist); // só o pedido feito na última semana entra automático
     if(cur){DIST.demand[id]=cur.map||{};DIST.pedMeta[id]=pedRecMeta(cur);if(cur.info)Object.keys(cur.info).forEach(c=>{if(!DIST.info[c])DIST.info[c]=cur.info[c];});}
     else{DIST.demand[id]={};delete DIST.pedMeta[id];}
   });
+}
+async function fetchPedRecs(){
+  const keys=FIXED_STORES.map(a=>K_PED(a[0]));
+  const m=await store.getMulti(keys); // 1 requisição só
+  if(m.ok)return keys.map(k=>({ok:true,value:m.values[k]}));
+  // servidor antigo (sem /api/kv-multi) ou falha: cai para leitura individual resiliente
+  return await Promise.all(keys.map(k=>store.getSafe(k)));
 }
 const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['outlet','Outlet'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
 let DIST={cdPct:0,stores:[],demand:{}};
@@ -2079,13 +2091,21 @@ async function loadDist(){
   DIST={cdPct:(+d.cdPct||0),stores:FIXED_STORES.map(a=>({id:a[0],name:a[1],pct:(sp[a[0]]!=null?+sp[a[0]]:0)})),demand:{},info:(d.info||{}),pedMeta:{},pedHist:{}};
   FIXED_STORES.forEach(a=>{DIST.demand[a[0]]={};});
   // Cada loja grava o pedido na própria chave (com histórico). Só o da última semana entra automático.
-  const recs=await Promise.all(FIXED_STORES.map(a=>store.get(K_PED(a[0]))));
-  applyPedRecs(recs);
+  const recs=await fetchPedRecs();
+  applyPedRecs(recs);pedReloadAt=Date.now();
 }
-async function reloadPedidosLojas(){
+let pedReloadBusy=false,pedReloadAt=0;
+async function distAtualizarPedidos(){const b=$('#dist-refresh');if(b){b.disabled=true;b.textContent='atualizando…';}
+  try{await reloadPedidosLojas(true);renderDist();if(typeof renderPedHist==='function')renderPedHist();toast('Pedidos atualizados','ok');}
+  catch(e){toast('Não consegui atualizar agora — tente de novo','err');}
+  finally{if(b){b.disabled=false;b.textContent='↻ Atualizar pedidos';}}}
+async function reloadPedidosLojas(force){
   if(!DIST||!DIST.stores)return;
-  const recs=await Promise.all(FIXED_STORES.map(a=>store.get(K_PED(a[0]))));
-  applyPedRecs(recs);
+  if(pedReloadBusy)return;
+  if(!force&&Date.now()-pedReloadAt<8000)return; // evita recarregar a cada clique
+  pedReloadBusy=true;
+  try{const recs=await fetchPedRecs();applyPedRecs(recs);pedReloadAt=Date.now();}
+  finally{pedReloadBusy=false;}
 }
 async function persistDist(){const pct={};DIST.stores.forEach(s=>pct[s.id]=s.pct);await store.set(K_DIST,{cdPct:DIST.cdPct,pct,info:(DIST.info||{})});}
 function distEscAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}

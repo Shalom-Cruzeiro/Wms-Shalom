@@ -139,6 +139,15 @@ app.get('/api/kv/:key', auth, async (req, res) => {
     res.json({ key: req.params.key, value: v });
   } catch (e) { console.error('kvGet erro:', e.message); res.status(500).json({ error: 'falha ao ler' }); }
 });
+// Leitura de várias chaves numa única requisição (usado pela Distribuição p/ carregar os 13 pedidos sem 13 chamadas)
+app.post('/api/kv-multi', auth, async (req, res) => {
+  try {
+    const keys = Array.isArray(req.body && req.body.keys) ? req.body.keys.slice(0, 100) : [];
+    const values = {};
+    for (const k of keys) { values[k] = await kvGet(k); }
+    res.json({ values });
+  } catch (e) { console.error('kvMulti erro:', e.message); res.status(500).json({ error: 'falha ao ler' }); }
+});
 app.put('/api/kv/:key', auth, async (req, res) => {
   try {
     await kvSet(req.params.key, req.body && req.body.value);
