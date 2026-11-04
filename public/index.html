@@ -2813,13 +2813,13 @@ async function distHistExport(id,tipo){
   const data=await store.get('inv_disthist_'+id);if(!data){toast('Não achei os dados','err');return;}
   if(tipo==='carga'){
     const aoa=[['Loja','Cod. Produto','Descricao','Fornecedor','Vaga','Pediu','Recebe']];
-    data.stores.forEach(s=>{data.rows.forEach(r=>{const got=r.recebe[s.id]||0;const pediu=(data.demand[s.id]||{})[r.cod]||0;if(got>0)aoa.push([s.name,r.cod,r.desc,r.forn,r.vaga,pediu,got]);});});
+    data.stores.forEach(s=>{data.rows.forEach(r=>{const got=r.recebe[s.id]||0;const pediu=(data.demand[s.id]||{})[r.cod]||0;if(got>0)aoa.push([s.name,r.cod,r.desc,(r.forn||distForn(r.cod)||''),r.vaga,pediu,got]);});});
     const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:16},{wch:14},{wch:42},{wch:22},{wch:12},{wch:8},{wch:8}];
     XLSX.utils.book_append_sheet(wb,ws,'Cargas');XLSX.writeFile(wb,'cargas_'+stamp()+'.xlsx');toast('Carga exportada','ok');
   }else{
     const rows=data.rows.filter(r=>r.comprar>0).slice().sort((a,b)=>b.comprar-a.comprar);
     const aoa=[['Cod. Produto','Descricao','Fornecedor','Pedido','Tem no CD','Comprar']];
-    rows.forEach(r=>aoa.push([r.cod,r.desc,r.forn,r.totalPed,(r.atendivel!=null?r.atendivel:Math.min(r.totalPed,r.disp)),r.comprar]));
+    rows.forEach(r=>aoa.push([r.cod,r.desc,(r.forn||distForn(r.cod)||''),r.totalPed,(r.atendivel!=null?r.atendivel:Math.min(r.totalPed,r.disp)),r.comprar]));
     const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:42},{wch:22},{wch:10},{wch:10},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws,'Compra');XLSX.writeFile(wb,'compra_'+stamp()+'.xlsx');toast('Proposta exportada','ok');
   }
