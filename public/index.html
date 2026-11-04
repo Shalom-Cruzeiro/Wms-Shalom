@@ -2883,7 +2883,7 @@ async function divEntAddLinhas(linhas,docs){
   const byId={};ENT.items.forEach(it=>byId[it.cod]=it);
   let added=0,skip=0;
   linhas.forEach(l=>{const p=l.p;if(!p){skip++;return;}const cod=p.cod;const q=+l.qtd||0;if(q<=0)return;
-    if(byId[cod]){byId[cod].qtd+=q;}else{const it={cod,ean:(p.eans&&p.eans[0])||p.ean||l.ean||'',desc:p.desc||l.xProd||'',qtd:q};ENT.items.push(it);byId[cod]=it;added++;}});
+    if(byId[cod]){byId[cod].qtd+=q;if(!byId[cod].forn&&p.forn)byId[cod].forn=p.forn;}else{const it={cod,ean:(p.eans&&p.eans[0])||p.ean||l.ean||'',desc:p.desc||l.xProd||'',forn:(p.forn||distForn(cod)||''),tam:(p.tam||extractSize(p.desc||l.xProd||'')||''),qtd:q};ENT.items.push(it);byId[cod]=it;added++;}});
   ENT.docs=Array.from(new Set(ENT.docs.concat(docs)));
   if(!Object.keys(ENT.pct).length)entDests().forEach(d=>ENT.pct[d.id]=0);
   await persistEnt();renderDivEnt();
@@ -2977,7 +2977,13 @@ function renderDivEntProds(){
   const s=$('#de-prod-sub');if(s){const cov=leN()?ENT.items.filter(it=>Object.keys(leStock(it)).length).length:0;const covTxt=leN()?(' · <b style="color:'+(cov?'var(--ok)':'var(--warn)')+'">'+cov+'/'+ENT.items.length+' com estoque por loja</b>'):' · <span style="color:var(--warn)">importe o estoque por loja</span>';s.innerHTML='NF '+(ENT.docs.join(', ')||'—')+' · '+ENT.items.length+' itens'+(items.length!==ENT.items.length?' · '+items.length+' no filtro':'')+covTxt;}
   $('#de-k-itens').textContent=fmt(ENT.items.length);$('#de-k-rec').textContent=fmt(kRec);$('#de-k-dist').textContent=fmt(kDist);
 }
-function deCargasRows(){const alloc=divEntCompute();const ds=entDests();const out=[];ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,forn:(it.forn||distForn(it.cod)||''),tam:(it.tam||(byCod[it.cod]||{}).tam||extractSize(it.desc||'')||''),qtd:q});});});return out;}
+function cargaForn(it){if(!it)return '';if(it.forn)return String(it.forn);
+  const p=findCat(it.cod)||(it.ean?(byEan[it.ean]||lookup(it.ean)):null)||byCod[it.cod];
+  return (p&&p.forn)?String(p.forn):'';}
+function cargaTam(it){if(!it)return '';if(it.tam)return String(it.tam);
+  const p=findCat(it.cod)||(it.ean?(byEan[it.ean]||lookup(it.ean)):null)||byCod[it.cod];
+  return (p&&p.tam)?String(p.tam):(extractSize(it.desc||(p&&p.desc)||'')||'');}
+function deCargasRows(){const alloc=divEntCompute();const ds=entDests();const out=[];ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)out.push({destId:d.id,dest:d.id==='cd'?'CD':d.name,cod:it.cod,ean:it.ean,desc:it.desc,forn:cargaForn(it),tam:cargaTam(it),qtd:q});});});return out;}
 const K_ENTHIST='inv_enthist_idx';
 async function enSalvar(){
   if(!ENT.items.length){toast('Nada para salvar','warn');return;}
@@ -3046,7 +3052,7 @@ function divEntGerarCargas(){
   if(!ENT.items.length){toast('Sem produtos','warn');return;}
   const alloc=divEntCompute();const ds=entDests();
   const aoa=[['Destino','Cod. Produto','Cod. Barras','Descricao','Fornecedor','Tam','Enviar']];
-  ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)aoa.push([d.id==='cd'?'CD':d.name,it.cod,it.ean,it.desc,(it.forn||distForn(it.cod)||''),(it.tam||(byCod[it.cod]||{}).tam||extractSize(it.desc||'')||''),q]);});});
+  ds.forEach(d=>{ENT.items.forEach(it=>{const q=(alloc[it.cod]||{})[d.id]||0;if(q>0)aoa.push([d.id==='cd'?'CD':d.name,it.cod,it.ean,it.desc,cargaForn(it),cargaTam(it),q]);});});
   if(aoa.length<2){toast('Nada para gerar — confira os percentuais','warn');return;}
   const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:14},{wch:15},{wch:42},{wch:24},{wch:8},{wch:8}];
   XLSX.utils.book_append_sheet(wb,ws,'Cargas entrada');XLSX.writeFile(wb,'cargas_entrada_'+stamp()+'.xlsx');toast('Cargas geradas','ok');
