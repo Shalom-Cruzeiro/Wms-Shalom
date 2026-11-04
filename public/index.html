@@ -2128,7 +2128,7 @@ async function persistDist(){const pct={};DIST.stores.forEach(s=>pct[s.id]=s.pct
 function distEscAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function distNum(v){if(v==null||v==='')return 0;if(typeof v==='number')return Math.round(v);let s=String(v).trim().replace(/\s/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return Math.round(parseFloat(s)||0);}
 function findCol(headers,terms,exclude){for(const t of terms)for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(exclude&&exclude.some(x=>h.includes(x)))continue;if(h.includes(t))return i;}return -1;}
-function distForn(cod){const f=(byCod[cod]||{}).forn;return f?String(f):'';}
+function distForn(cod){let p=byCod[cod];if(!p||!p.forn)p=findCat(cod)||p;return (p&&p.forn)?String(p.forn):'';}
 function distFornCell(cod){const f=distForn(cod);return f?distEscAttr(f):'<span style="color:var(--soft)">—</span>';}
 
 function distSetCdPct(v){DIST.cdPct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}
@@ -2602,7 +2602,7 @@ function distCompute(){
     }
     const p=byCod[cod]||{};const pi=(DIST.info&&DIST.info[cod])||{};const li=leInfo(cod);
     const atendivel=Math.min(totalPed,available);
-    res[cod]={cod,desc:p.desc||pi.desc||li.desc||'',forn:p.forn||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available),incat:!!byCod[cod]};
+    res[cod]={cod,desc:p.desc||pi.desc||li.desc||'',forn:p.forn||distForn(cod)||'',vaga:vagaOf(cod),disp,reserve,recebe,dist,sobra:disp-dist,totalPed,atendivel,comprar:Math.max(0,totalPed-available),incat:!!byCod[cod]};
     kDisp+=disp;kDist+=dist;kBuy+=res[cod].comprar;kRes+=reserve;kAtend+=atendivel;
   });
   const set=(id,v)=>{const e=$('#'+id);if(e)e.textContent=fmt(v);};
@@ -2864,8 +2864,18 @@ function onLojaEstFile(ev){
     LOJAEST={byCod:byCod2,byEan:{},info:parsed.info||{}};rebuildLeEan();
     SALDO=newSaldo;await persistSaldo();
     const ok=await store.set(K_LOJAEST,LOJAEST);if(!ok)toast('Estoque grande: ficará só nesta sessão.','warn');
+    // O mesmo arquivo (Registro de Inventário) é agrupado por fornecedor — capturamos fornecedor/desc/tam/ref para o cadastro
+    let fornUpd=0;
+    try{const prods=processRegistroInventario(aoa);
+      if(prods&&prods.length){
+        prods.forEach(p=>{const ex=(p.cod&&byCod[p.cod])||(p.ean&&byEan[p.ean]);
+          if(ex){if(p.forn){if(ex.forn!==p.forn)fornUpd++;ex.forn=p.forn;}if(!ex.desc&&p.desc)ex.desc=p.desc;if(!ex.tam&&p.tam)ex.tam=p.tam;if(p.ref&&!ex.ref)ex.ref=p.ref;if(p.eans&&p.eans.length){ex.eans=ex.eans||[];p.eans.forEach(e=>{if(e&&!ex.eans.includes(e))ex.eans.push(e);});if(!ex.ean&&ex.eans[0])ex.ean=ex.eans[0];}}
+          else{CATALOG.push({cod:p.cod||'',ean:(p.eans&&p.eans[0])||'',eans:p.eans||[],desc:p.desc||'',tam:p.tam||'',forn:p.forn||'',ref:p.ref||''});if(p.forn)fornUpd++;}});
+        buildIndex();await persistCatalog();if(typeof renderCatalog==='function')renderCatalog();
+      }
+    }catch(e){}
     renderDivEnt();if(typeof renderEstoque==='function')renderEstoque();if(typeof renderRdist==='function')renderRdist();if(typeof renderDist==='function')renderDist();if(typeof renderStats==='function')renderStats();if(typeof renderCount==='function'&&typeof onContagem==='function'&&onContagem())renderCount();
-    toast('Estoque importado · CD: '+fmt(cdCount)+' · lojas: '+fmt(Object.keys(byCod2).length)+' produtos','ok');
+    toast('Estoque importado · CD: '+fmt(cdCount)+' · lojas: '+fmt(Object.keys(byCod2).length)+' produtos'+(fornUpd?(' · '+fmt(fornUpd)+' c/ fornecedor'):''),'ok');
   }catch(e){toast('Erro ao ler: '+e.message,'err');}};
   r.readAsArrayBuffer(f);ev.target.value='';
 }
