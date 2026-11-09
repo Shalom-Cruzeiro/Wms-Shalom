@@ -2006,7 +2006,8 @@ function K_PED(id){return 'inv_ped_loja_'+id;}
 const PED_WEEK_MS=7*24*3600*1000;
 function pedHistOf(val){if(!val)return [];if(Array.isArray(val.history))return val.history.slice();if(val.map)return [val];return [];}
 function pedRecMeta(r){return {savedAt:r.savedAt||0,by:r.by||'',days:r.days||0,itens:(r.itens!=null?r.itens:Object.keys(r.map||{}).length),un:(r.un!=null?r.un:Object.values(r.map||{}).reduce((x,y)=>x+(+y||0),0)),custoTotal:r.custoTotal||0,vendaTotal:r.vendaTotal||0};}
-function pedCurrentRec(hist){if(!hist||!hist.length)return null;const lim=Date.now()-PED_WEEK_MS;for(let i=0;i<hist.length;i++){if((hist[i].savedAt||0)>=lim)return hist[i];}return null;}
+/* Sempre carrega o ÚLTIMO pedido salvo da loja (nunca some). A idade é mostrada na tela. */
+function pedCurrentRec(hist){if(!hist||!hist.length)return null;return hist[0];}
 function applyPedRecs(recs){
   // recs[i] = {ok, value}. Em falha de leitura (ok=false) NÃO apaga o que já tem (evita o "pisca-pisca").
   if(!DIST.pedMeta)DIST.pedMeta={};if(!DIST.info)DIST.info={};if(!DIST.pedHist)DIST.pedHist={};
@@ -2407,7 +2408,7 @@ async function pedSalvar(){
     if((r.desc||r.ean)&&!(byCod[r.cod]))info[r.cod]={desc:r.desc||'',ean:r.ean||''};});
   const rec={storeId:PED.loja,lojaNm:lojaNm,savedAt:Date.now(),by:(CURRENT_USER||''),days:PED.days||0,alvoD:PED.alvoD||0,
     itens:Object.keys(map).length,un:un,custoTotal:custoTotal,vendaTotal:vendaTotal,map:map,info:info,custos:custos};
-  hist.unshift(rec);if(hist.length>24)hist=hist.slice(0,24);
+  hist.unshift(rec);if(hist.length>52)hist=hist.slice(0,52);
   const ok=await store.set(K_PED(PED.loja),{v:2,storeId:PED.loja,history:hist});
   if(!ok){toast('Não consegui salvar no servidor agora — tente de novo em instantes (nada foi enviado à Distribuição).','err');return;}
   // Atualiza em memória só a própria loja (não mexe nas outras)
@@ -2615,16 +2616,17 @@ function distVagaPill(v){return v?'<span class="pill-vaga">'+v+'</span>':'<span 
 function pedQuando(ts){if(!ts)return '';const dt=new Date(ts);const p=n=>(n<10?'0':'')+n;return p(dt.getDate())+'/'+p(dt.getMonth()+1)+' '+p(dt.getHours())+':'+p(dt.getMinutes());}
 function renderPedHist(){
   const body=$('#pedhist-body');if(!body)return;
-  const list=FIXED_STORES.map(a=>{const id=a[0];const hist=(DIST&&DIST.pedHist&&DIST.pedHist[id])||[];const last=hist[0]||null;return {id:id,name:a[1],hist:hist,last:last?pedRecMeta(last):null};});
-  const feitos=list.filter(x=>x.last).sort((a,b)=>((b.last&&b.last.savedAt)||0)-((a.last&&a.last.savedAt)||0));
-  const faltam=list.filter(x=>!x.last);
-  const naSemana=feitos.filter(x=>(Date.now()-(x.last.savedAt||0))<PED_WEEK_MS).length;
-  const sub=$('#pedhist-sub');if(sub)sub.textContent=naSemana+' de '+list.length+' lojas com pedido nesta semana';
-  let rows=feitos.map(x=>{const m=x.last;const dentro=(Date.now()-(m.savedAt||0))<PED_WEEK_MS;
-    return '<tr'+(dentro?'':' style="background:#fffaf0"')+'><td>'+distEscAttr(x.name)+(dentro?'':' <span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-size:9.5px">fora da semana</span>')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.un)+'</td><td class="r">'+fmtBRL(m.custoTotal||0)+'</td><td class="r">'+fmtBRL(m.vendaTotal||0)+'</td><td style="font-size:12px;color:var(--muted)">'+(m.savedAt?pedQuando(m.savedAt):'—')+(m.by?(' · '+distEscAttr(m.by)):'')+(x.hist.length>1?(' · '+x.hist.length+' versões'):'')+'</td><td class="r"><button class="btn sm" onclick="pedEditarSalvo(\''+x.id+'\',0)">reabrir p/ editar</button></td></tr>';}).join('');
-  rows+=faltam.map(x=>'<tr style="background:#fff5f5"><td style="color:#b42318;font-weight:700">'+distEscAttr(x.name)+'</td><td class="r" style="color:#b42318" colspan="6">✗ nunca salvou pedido</td></tr>').join('');
-  if(!feitos.length&&!faltam.length){body.innerHTML='<div class="empty" style="padding:24px">Nenhum pedido salvo ainda.</div>';return;}
-  body.innerHTML='<table><thead><tr><th>Loja</th><th class="r">Itens</th><th class="r">Un</th><th class="r">Custo</th><th class="r">Venda</th><th>Último salvo</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  const all=[];
+  FIXED_STORES.forEach(a=>{const id=a[0];const hist=(DIST&&DIST.pedHist&&DIST.pedHist[id])||[];hist.forEach((rec,idx)=>{all.push({id:id,name:a[1],idx:idx,m:pedRecMeta(rec)});});});
+  all.sort((x,y)=>((y.m.savedAt)||0)-((x.m.savedAt)||0));
+  const faltam=FIXED_STORES.filter(a=>!(((DIST&&DIST.pedHist&&DIST.pedHist[a[0]])||[]).length));
+  const naSemana=all.filter(x=>(Date.now()-(x.m.savedAt||0))<PED_WEEK_MS).length;
+  const sub=$('#pedhist-sub');if(sub)sub.textContent=all.length+' pedidos salvos · '+naSemana+' nesta semana';
+  if(!all.length&&!faltam.length){body.innerHTML='<div class="empty" style="padding:24px">Nenhum pedido salvo ainda.</div>';return;}
+  let rows=all.map(x=>{const m=x.m;const dentro=(Date.now()-(m.savedAt||0))<PED_WEEK_MS;const atual=x.idx===0;
+    return '<tr'+(dentro?'':' style="background:#fffaf0"')+'><td>'+distEscAttr(x.name)+(atual?'':' <span class="badge b-mut" style="font-size:9.5px">versão anterior</span>')+(dentro?'':' <span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-size:9.5px">fora da semana</span>')+'</td><td style="font-size:12px;color:var(--muted)">'+(m.savedAt?pedQuando(m.savedAt):'—')+(m.by?(' · '+distEscAttr(m.by)):'')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.un)+'</td><td class="r">'+fmtBRL(m.custoTotal||0)+'</td><td class="r">'+fmtBRL(m.vendaTotal||0)+'</td><td class="r"><button class="btn sm" onclick="pedEditarSalvo(\''+x.id+'\','+x.idx+')">reabrir p/ editar</button></td></tr>';}).join('');
+  rows+=faltam.map(a=>'<tr style="background:#fff5f5"><td style="color:#b42318;font-weight:700">'+distEscAttr(a[1])+'</td><td class="r" style="color:#b42318" colspan="6">✗ nunca salvou pedido</td></tr>').join('');
+  body.innerHTML='<table><thead><tr><th>Loja</th><th>Salvo em</th><th class="r">Itens</th><th class="r">Un</th><th class="r">Custo</th><th class="r">Venda</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
@@ -2636,10 +2638,10 @@ function renderDistLojas(){
     const acts=busy?'<span class="badge b-info">lendo…</span>':(linkHist+linkRem);
     let badge,info,cls='';
     const valCells=m=>'<span class="v"><b>'+fmt(m.itens)+'</b> itens</span>'+sep+'<span class="v"><b>'+fmt(m.un)+'</b> un</span>'+sep+'<span class="v">custo <b>'+fmtBRL(m.custoTotal||0)+'</b></span>'+sep+'<span class="v">venda <b>'+fmtBRL(m.vendaTotal||0)+'</b></span>';
-    if(fez){const m=meta||{};badge='<span class="badge b-ok">✓ pedido da semana</span>';
+    if(fez){const m=meta||{};const dentro=(Date.now()-(m.savedAt||0))<PED_WEEK_MS;
+      if(dentro){badge='<span class="badge b-ok">✓ pedido da semana</span>';}
+      else{badge='<span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-weight:700" title="pedido de uma semana anterior — continua valendo">⚠ pedido de '+pedQuando(m.savedAt)+'</span>';cls=' old';}
       info=valCells(m)+(m.savedAt?(sep+'<span class="v">salvo '+pedQuando(m.savedAt)+(m.by?(' · '+distEscAttr(m.by)):'')+'</span>'):'');}
-    else if(hist.length){const m=pedRecMeta(hist[0]||{});badge='<span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-weight:700">⚠ sem pedido nesta semana</span>';cls=' old';
-      info='<span class="v" style="color:#7a4b00">último '+pedQuando(m.savedAt)+':</span>'+sep+valCells(m);}
     else{badge='<span class="badge" style="background:#fde8e8;color:#b42318;border:1px solid #f5c2c2;font-weight:700">✗ não fez o pedido</span>';cls=' miss';
       info='<span class="v">sem pedido salvo</span>';}
     let sepBadge='';
