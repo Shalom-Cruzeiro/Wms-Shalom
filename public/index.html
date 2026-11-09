@@ -524,7 +524,10 @@
   <!-- ============== SALVOS ============== -->
   <section id="view-salvos" style="display:none">
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>Pedidos salvos (por loja)</h3><span class="sub" id="pedhist-sub"></span></div>
+      <div class="hd"><h3>Pedidos salvos (por loja)</h3><span class="sub" id="pedhist-sub"></span>
+        <div class="right"><button class="btn sm" onclick="pedExportBackup()" title="Baixa um arquivo com todos os pedidos — guarde fora do sistema">⤓ Exportar backup</button>
+        <button class="btn sm gho" onclick="document.getElementById('ped-bkfile').click()" title="Restaura os pedidos de um arquivo de backup">Importar backup</button>
+        <input type="file" id="ped-bkfile" accept=".json" onchange="pedImportBackup(event)"></div></div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="pedhist-body"></div></div>
     </div>
     <div class="card">
@@ -2003,7 +2006,11 @@ function exportVagas(){
 /* ============== DISTRIBUIÇÃO ENTRE LOJAS ============== */
 const K_DIST='inv_dist_v2';
 function K_PED(id){return 'inv_ped_loja_'+id;}
+const K_PBK='inv_ped_backup'; // cópia de segurança (append-only) de TODOS os pedidos salvos
+let PEDBACKUP={};             // { storeId: [rec,...] } carregado do servidor
 const PED_WEEK_MS=7*24*3600*1000;
+function pedMergeHist(primary,secondary,cap){const seen={};const out=[];(primary||[]).concat(secondary||[]).forEach(r=>{if(!r)return;const k=String(r.savedAt||0);if(seen[k])return;seen[k]=1;out.push(r);});out.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0));return out.slice(0,cap||200);}
+async function pedBackupSave(storeId,rec){try{const bk=await store.getSafe(K_PBK);const all=(bk.ok&&bk.value&&typeof bk.value==='object')?bk.value:{};all[storeId]=pedMergeHist([rec],all[storeId]||[]);PEDBACKUP=all;await store.set(K_PBK,all);}catch(e){}}
 function pedHistOf(val){if(!val)return [];if(Array.isArray(val.history))return val.history.slice();if(val.map)return [val];return [];}
 function pedRecMeta(r){return {savedAt:r.savedAt||0,by:r.by||'',days:r.days||0,itens:(r.itens!=null?r.itens:Object.keys(r.map||{}).length),un:(r.un!=null?r.un:Object.values(r.map||{}).reduce((x,y)=>x+(+y||0),0)),custoTotal:r.custoTotal||0,vendaTotal:r.vendaTotal||0};}
 /* Sempre carrega o ÚLTIMO pedido salvo da loja (nunca some). A idade é mostrada na tela. */
@@ -2013,20 +2020,26 @@ function applyPedRecs(recs){
   if(!DIST.pedMeta)DIST.pedMeta={};if(!DIST.info)DIST.info={};if(!DIST.pedHist)DIST.pedHist={};
   FIXED_STORES.forEach((a,i)=>{const id=a[0];const r=recs[i]||{ok:false};
     if(!r.ok)return; // mantém o estado atual desta loja
-    const hist=pedHistOf(r.value);DIST.pedHist[id]=hist;
-    const cur=pedCurrentRec(hist); // só o pedido feito na última semana entra automático
+    const active=pedHistOf(r.value);
+    const bk=(PEDBACKUP&&PEDBACKUP[id])||[];
+    const hist=pedMergeHist(active,bk); // une chave ativa + cópia de segurança (nada se perde)
+    DIST.pedHist[id]=hist;
+    // AUTO-RECUPERAÇÃO: se a chave ativa esvaziou mas o backup tem pedidos, regrava a chave
+    if(!active.length&&bk.length){try{store.set(K_PED(id),{v:2,storeId:id,history:hist.slice(0,52)});}catch(e){}}
+    const cur=pedCurrentRec(hist);
     if(cur){DIST.demand[id]=cur.map||{};DIST.pedMeta[id]=pedRecMeta(cur);if(cur.info)Object.keys(cur.info).forEach(c=>{if(!DIST.info[c])DIST.info[c]=cur.info[c];});}
     else{DIST.demand[id]={};delete DIST.pedMeta[id];}
   });
 }
 async function fetchPedRecs(){
   const keys=FIXED_STORES.map(a=>K_PED(a[0]));
-  const allKeys=keys.concat(['inv_phist_idx']);
-  const m=await store.getMulti(allKeys); // 1 requisição só (pedidos + histórico de picking)
-  if(m.ok){if(Array.isArray(m.values['inv_phist_idx']))PICKHIST=m.values['inv_phist_idx'];return keys.map(k=>({ok:true,value:m.values[k]}));}
+  const allKeys=keys.concat(['inv_phist_idx',K_PBK]);
+  const m=await store.getMulti(allKeys); // 1 requisição só (pedidos + histórico de picking + backup)
+  if(m.ok){if(Array.isArray(m.values['inv_phist_idx']))PICKHIST=m.values['inv_phist_idx'];if(m.values[K_PBK]&&typeof m.values[K_PBK]==='object')PEDBACKUP=m.values[K_PBK];return keys.map(k=>({ok:true,value:m.values[k]}));}
   // servidor antigo (sem /api/kv-multi) ou falha: cai para leitura individual resiliente
   const safe=await Promise.all(keys.map(k=>store.getSafe(k)));
   try{const ph=await store.getSafe(K_PHIST);if(ph.ok&&Array.isArray(ph.value))PICKHIST=ph.value;}catch(e){}
+  try{const bk=await store.getSafe(K_PBK);if(bk.ok&&bk.value&&typeof bk.value==='object')PEDBACKUP=bk.value;}catch(e){}
   return safe;
 }
 function distSepStatus(sid,name){
@@ -2135,12 +2148,10 @@ function distFornCell(cod){const f=distForn(cod);return f?distEscAttr(f):'<span 
 function distSetCdPct(v){DIST.cdPct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}
 function distSetPct(id,v){const s=DIST.stores.find(x=>x.id===id);if(s){s.pct=Math.max(0,parseFloat(v)||0);persistDist();updateDistSum();renderDist();}}
 async function distLimparTudo(){
-  if(!distCodes().length){toast('Não há pedidos para limpar','warn');return;}
-  if(!confirm('Limpar os pedidos de TODAS as lojas? (os percentuais são mantidos)'))return;
-  await Promise.all(DIST.stores.map(s=>store.del(K_PED(s.id))));
-  DIST.stores.forEach(s=>{DIST.demand[s.id]={};});DIST.over={};DIST.edited={};DIST.pedMeta={};DIST.pedHist={};
-  distOnlyStock=false;renderDistLojas();renderDist();
-  toast('Pedidos limpos','ok');
+  if(!confirm('Zerar os percentuais e os ajustes manuais desta distribuição?\n\nOs pedidos salvos das lojas NÃO são apagados.'))return;
+  DIST.over={};DIST.edited={};DIST.cdPct=0;DIST.stores.forEach(s=>s.pct=0);distOnlyStock=false;
+  await persistDist();renderDistLojas();renderDist();
+  toast('Percentuais e ajustes zerados — pedidos mantidos','ok');
 }
 function distDividirIgual(){const n=DIST.stores.length;if(!n)return;const rem=Math.max(0,100-(+DIST.cdPct||0));const base=Math.floor(rem/n);DIST.stores.forEach(s=>s.pct=base);DIST.stores[0].pct+=rem-base*n;persistDist();renderDistLojas();renderDist();}
 function updateDistSum(){const t=(+DIST.cdPct||0)+DIST.stores.reduce((a,s)=>a+(+s.pct||0),0);const el=$('#dist-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
@@ -2153,7 +2164,10 @@ function distOverlay(show,msg){
   o.style.display=show?'flex':'none';
 }
 function distPick(id){if(distBusy)return;distFileTarget=id;$('#dist-file').click();}
-async function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+' e TODO o histórico dela? Não dá para desfazer.'))return;await store.del(K_PED(id));DIST.demand[id]={};if(DIST.pedMeta)delete DIST.pedMeta[id];if(DIST.pedHist)DIST.pedHist[id]=[];renderDistLojas();renderDist();toast('Pedido removido','ok');}
+async function distClearPedido(id){if(distBusy)return;const s=DIST.stores.find(x=>x.id===id);if(!confirm('Remover o pedido de '+((s&&s.name)||'esta loja')+' e TODO o histórico dela? Não dá para desfazer.'))return;
+  await store.del(K_PED(id));
+  try{const bk=await store.getSafe(K_PBK);if(bk.ok&&bk.value&&typeof bk.value==='object'){delete bk.value[id];await store.set(K_PBK,bk.value);PEDBACKUP=bk.value;}}catch(e){}
+  DIST.demand[id]={};if(DIST.pedMeta)delete DIST.pedMeta[id];if(DIST.pedHist)DIST.pedHist[id]=[];renderDistLojas();renderDist();toast('Pedido removido','ok');}
 
 let distPreview=null;
 function openDistPreview(id,map,raw,ocr,info){
@@ -2411,6 +2425,7 @@ async function pedSalvar(){
   hist.unshift(rec);if(hist.length>52)hist=hist.slice(0,52);
   const ok=await store.set(K_PED(PED.loja),{v:2,storeId:PED.loja,history:hist});
   if(!ok){toast('Não consegui salvar no servidor agora — tente de novo em instantes (nada foi enviado à Distribuição).','err');return;}
+  await pedBackupSave(PED.loja,rec); // cópia de segurança (nada se perde)
   // Atualiza em memória só a própria loja (não mexe nas outras)
   if(!DIST.demand)DIST.demand={};DIST.demand[PED.loja]=map;
   if(!DIST.pedHist)DIST.pedHist={};DIST.pedHist[PED.loja]=hist;
@@ -2627,6 +2642,40 @@ function renderPedHist(){
     return '<tr'+(dentro?'':' style="background:#fffaf0"')+'><td>'+distEscAttr(x.name)+(atual?'':' <span class="badge b-mut" style="font-size:9.5px">versão anterior</span>')+(dentro?'':' <span class="badge" style="background:#fff3d6;color:#7a4b00;border:1px solid #f0dcb4;font-size:9.5px">fora da semana</span>')+'</td><td style="font-size:12px;color:var(--muted)">'+(m.savedAt?pedQuando(m.savedAt):'—')+(m.by?(' · '+distEscAttr(m.by)):'')+'</td><td class="r num">'+fmt(m.itens)+'</td><td class="r num">'+fmt(m.un)+'</td><td class="r">'+fmtBRL(m.custoTotal||0)+'</td><td class="r">'+fmtBRL(m.vendaTotal||0)+'</td><td class="r"><button class="btn sm" onclick="pedEditarSalvo(\''+x.id+'\','+x.idx+')">reabrir p/ editar</button></td></tr>';}).join('');
   rows+=faltam.map(a=>'<tr style="background:#fff5f5"><td style="color:#b42318;font-weight:700">'+distEscAttr(a[1])+'</td><td class="r" style="color:#b42318" colspan="6">✗ nunca salvou pedido</td></tr>').join('');
   body.innerHTML='<table><thead><tr><th>Loja</th><th>Salvo em</th><th class="r">Itens</th><th class="r">Un</th><th class="r">Custo</th><th class="r">Venda</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function pedExportBackup(){
+  const peds={};let n=0,v=0;
+  FIXED_STORES.forEach(a=>{const h=(DIST&&DIST.pedHist&&DIST.pedHist[a[0]])||[];if(h.length){peds[a[0]]=h;n++;v+=h.length;}});
+  if(!v){toast('Não há pedidos para exportar','warn');return;}
+  const data={type:'shalom-pedidos-backup',versao:1,exportadoEm:new Date().toISOString(),lojas:n,versoes:v,peds:peds};
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='backup_pedidos_'+stamp()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  toast('Backup exportado: '+n+' lojas · '+v+' pedidos','ok');
+}
+function pedImportBackup(ev){
+  const f=ev.target.files[0];if(!f)return;ev.target.value='';
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!data||!data.peds||typeof data.peds!=='object'){toast('Arquivo de backup inválido','err');return;}
+      if(!confirm('Importar este backup? Os pedidos do arquivo serão mesclados com os atuais (nada é apagado; versões iguais não duplicam).'))return;
+      let lojas=0,vers=0;
+      const bkAll=await store.getSafe(K_PBK);let backup=(bkAll.ok&&bkAll.value&&typeof bkAll.value==='object')?bkAll.value:{};
+      for(const id of Object.keys(data.peds)){
+        const incoming=Array.isArray(data.peds[id])?data.peds[id]:[];if(!incoming.length)continue;
+        const cur=await store.getSafe(K_PED(id));const curHist=pedHistOf(cur.ok?cur.value:null);
+        const merged=pedMergeHist(curHist,incoming,52);
+        await store.set(K_PED(id),{v:2,storeId:id,history:merged});
+        backup[id]=pedMergeHist(backup[id]||[],incoming,200);
+        lojas++;vers+=incoming.length;
+      }
+      await store.set(K_PBK,backup);PEDBACKUP=backup;
+      await reloadPedidosLojas(true);renderPedHist();if(typeof renderDist==='function')renderDist();
+      toast('Backup importado: '+lojas+' lojas · '+vers+' pedidos','ok');
+    }catch(e){toast('Erro ao importar: '+e.message,'err');}
+  };
+  r.readAsText(f);
 }
 function renderDistLojas(){
   const el=$('#dist-lojas');if(!el)return;
