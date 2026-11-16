@@ -628,7 +628,7 @@
         <div class="right">
           <span class="sumbadge" id="de-sum">soma 0%</span>
           <button class="btn sm" id="de-btn-igual" onclick="divEntDividirIgual()">Dividir igual</button>
-          <button class="btn sm" id="de-btn-venda" onclick="divEntDividirVenda()" title="13 lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
+          <button class="btn sm" id="de-btn-venda" onclick="divEntDividirVenda()" title="Lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
         </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="de-dests"></div></div>
@@ -692,7 +692,7 @@
         <div class="right">
           <span class="sumbadge" id="rd-sum">soma 0%</span>
           <button class="btn sm" id="rd-btn-igual" onclick="rdDividirIgual()">Dividir igual</button>
-          <button class="btn sm" id="rd-btn-venda" onclick="rdDividirVenda()" title="13 lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
+          <button class="btn sm" id="rd-btn-venda" onclick="rdDividirVenda()" title="Lojas pelo % de venda; o CD mantém o % definido">Dividir pela média de venda</button>
         </div>
       </div>
       <div class="bd" style="padding:0"><div class="tbl-scroll" id="rd-dests"></div></div>
@@ -2969,7 +2969,7 @@ function divEntDividirVenda(){
   raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});
   raw.forEach(o=>ENT.pct[o.id]=o.base);ENT.pct['cd']=cd;
   ENT.over={};ENT.edited={};ENT.mode='venda';persistEnt();renderDivEnt();
-  toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');
+  toast(FIXED_STORES.length+' lojas pela venda; CD mantido em '+cd+'%','ok');
 }
 function divEntCompute(S){
   S=S||ENT;
@@ -3139,7 +3139,7 @@ function rdSetPct(id,v){RDIST.pct[id]=Math.max(0,parseFloat(v)||0);RDIST.mode='m
 function rdUpdateSum(){const t=entDests().reduce((a,d)=>a+(+RDIST.pct[d.id]||0),0);const el=$('#rd-sum');if(el){el.textContent='soma '+(Math.round(t*100)/100)+'%';el.className='sumbadge '+(Math.abs(t-100)<0.001?'ok':'bad');}}
 function rdUpdateModeBtns(){['rd-btn-igual','rd-btn-venda'].forEach(id=>{const b=$('#'+id);if(b)b.classList.remove('pri');});const act={igual:'rd-btn-igual',venda:'rd-btn-venda'}[RDIST.mode];if(act){const b=$('#'+act);if(b)b.classList.add('pri');}}
 function rdDividirIgual(){const ds=entDests();const n=ds.length;const base=Math.floor(100/n);ds.forEach(d=>RDIST.pct[d.id]=base);RDIST.pct[ds[0].id]+=100-base*n;RDIST.over={};RDIST.edited={};RDIST.mode='igual';persistRdist();renderRdist();}
-function rdDividirVenda(){if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}const cd=+RDIST.pct['cd']||0;const rest=Math.max(0,100-cd);const lojas=FIXED_STORES.map(a=>a[0]);const total=lojas.reduce((a,id)=>a+(VENDAS[id]||0),0);if(total<=0){toast('Vendas zeradas','warn');return;}const raw=lojas.map(id=>{const exact=(VENDAS[id]||0)/total*rest;return {id,exact,base:Math.floor(exact)};});let rem=rest-raw.reduce((a,o)=>a+o.base,0);raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});raw.forEach(o=>RDIST.pct[o.id]=o.base);RDIST.pct['cd']=cd;RDIST.over={};RDIST.edited={};RDIST.mode='venda';persistRdist();renderRdist();toast('13 lojas pela venda; CD mantido em '+cd+'%','ok');}
+function rdDividirVenda(){if(!VENDAS||!Object.keys(VENDAS).length){toast('Importe o arquivo de vendas primeiro (na tela de Distribuição)','warn');return;}const cd=+RDIST.pct['cd']||0;const rest=Math.max(0,100-cd);const lojas=FIXED_STORES.map(a=>a[0]);const total=lojas.reduce((a,id)=>a+(VENDAS[id]||0),0);if(total<=0){toast('Vendas zeradas','warn');return;}const raw=lojas.map(id=>{const exact=(VENDAS[id]||0)/total*rest;return {id,exact,base:Math.floor(exact)};});let rem=rest-raw.reduce((a,o)=>a+o.base,0);raw.slice().sort((a,b)=>(b.exact-b.base)-(a.exact-a.base)).forEach(o=>{if(rem>0){o.base++;rem--;}});raw.forEach(o=>RDIST.pct[o.id]=o.base);RDIST.pct['cd']=cd;RDIST.over={};RDIST.edited={};RDIST.mode='venda';persistRdist();renderRdist();toast(FIXED_STORES.length+' lojas pela venda; CD mantido em '+cd+'%','ok');}
 function renderRdistDests(){const el=$('#rd-dests');if(!el)return;el.innerHTML='<div class="pctlist">'+entDests().map(d=>{const isCd=d.id==='cd';return '<div class="'+(isCd?'pctcd':'pctrow')+'"><span class="nm"'+(isCd?' style="font-weight:700;color:var(--brand-d)"':'')+'>'+distEscAttr(d.name)+'</span><input type="number" min="0" value="'+(+RDIST.pct[d.id]||0)+'" oninput="rdSetPct(\''+d.id+'\',this.value)"><span class="pc">%</span>'+(isCd?'<span class="ped" style="font-size:10.5px;color:var(--brand-d)">também recebe</span>':'')+'</div>';}).join('')+'</div>';rdUpdateSum();}
 function fillRdLojaSel(){const sel=$('#rd-prod-loja');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="__all">Todas as lojas</option>'+entDests().map(d=>'<option value="'+d.id+'">'+distEscAttr(deShortName(d))+'</option>').join('');if(cur)sel.value=cur;}
 function renderRdist(){const st=$('#rd-loja-status');if(st)st.innerHTML=leN()?('Estoque por loja: <b style="color:var(--ok)">'+fmt(leN())+' produtos</b>'):'Estoque por loja: <span style="color:var(--warn)">não importado</span>';const bs=$('#rd-base');if(bs)bs.value=RDIST.base||'cd';fillRdForn();renderRdMix();const show=RDIST.items.length>0;['rd-after','rd-stats','rd-prodcard'].forEach(id=>{const e=$('#'+id);if(e)e.style.display=show?'':'none';});if(show){renderRdistDests();rdUpdateModeBtns();fillRdLojaSel();renderRdistProds();}}
