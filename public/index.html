@@ -2053,7 +2053,7 @@ function distSepStatus(sid,name){
   }
   return {separado:false};
 }
-const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['outlet','Outlet'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
+const FIXED_STORES=[['estacao','Estação'],['delrey','DelRey'],['betim','Betim'],['minas','Minas'],['via','Via'],['itau','Itaú'],['boulevard','Boulevard'],['ipatinga','Ipatinga'],['cidade','Cidade'],['savassi','Savassi'],['valadares','Valadares'],['itabira','Itabira']];
 let DIST={cdPct:0,stores:[],demand:{}};
 let PICKHIST=[]; // índice dos pickings salvos (para marcar "pedido separado" na Distribuição)
 let distStep=1, distFileTarget=null;
@@ -2067,7 +2067,6 @@ function vendaMatchStore(nome){
   if(n.includes('estacao'))return 'estacao';
   if(n.includes('del rey')||n.includes('delrey'))return 'delrey';
   if(n.includes('betim'))return 'betim';
-  if(n.includes('so marcas')||n.includes('marcas')||n.includes('outlet'))return 'outlet';
   if(n.includes('minas'))return 'minas';
   if(n.includes('itau'))return 'itau';
   if(n.includes('boulevard'))return 'boulevard';
@@ -2878,7 +2877,7 @@ async function distHistExport(id,tipo){
 
 /* ===== Dividir nova entrada (XML) ===== */
 const K_LOJAEST='inv_lojaest_v1', K_ENT='inv_diventrada_v1';
-const ENT_NUM2ID={'14':'cd','15':'itabira','16':'delrey','17':'betim','18':'outlet','19':'minas','20':'via','21':'cidade','22':'ipatinga','23':'itau','24':'boulevard','25':'valadares','26':'savassi','27':'estacao'};
+const ENT_NUM2ID={'14':'cd','15':'itabira','16':'delrey','17':'betim','19':'minas','20':'via','21':'cidade','22':'ipatinga','23':'itau','24':'boulevard','25':'valadares','26':'savassi','27':'estacao'};
 let LOJAEST={byCod:{},byEan:{}};
 let ENT={docs:[],items:[],pct:{},over:{},edited:{},mode:''};
 var deEditIdx=-1;
