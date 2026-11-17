@@ -883,6 +883,11 @@ function buildIndex(){byEan={};byCod={};byEanN={};byCodN={};
 function lookup(code){code=String(code).trim();if(byEan[code])return byEan[code];if(byCod[code])return byCod[code];const n=normCode(code);return byEanN[n]||byCodN[n]||null;}
 function catId(p){return p.cod||p.ean||(p.eans&&p.eans[0])||'';}
 function findCat(id){id=String(id).trim();if(byCod[id])return byCod[id];if(byEan[id])return byEan[id];const n=normCode(id);return byCodN[n]||byEanN[n]||null;}
+// Fornecedor "de verdade"? "GERAL"/"DIVERSOS" etc. são marcadores do inventário, não o fornecedor real.
+function fornPlaceholder(f){f=String(f||'').trim().toLowerCase();if(!f)return true;if(f.indexOf('geral')>=0)return true;return ['diversos','outros','varios','vários','sem fornecedor','nao definido','não definido','n/d','nd','-','.'].indexOf(f)>=0;}
+// O arquivo de vendas vem agrupado pelo fornecedor REAL. Usa ele para curar o cadastro:
+// corrige "GERAL" para o fornecedor certo e preenche custo/venda quando faltam.
+function mergeVendasCatalog(info){if(!info)return 0;let ch=0;Object.keys(info).forEach(cod=>{const vi=info[cod]||{};const p=byCod[cod]||byCodN[normCode(cod)];if(!p)return;if(vi.forn&&!fornPlaceholder(vi.forn)&&fornPlaceholder(p.forn)){p.forn=vi.forn;ch++;}if(vi.custo>0&&!(p.custo>0)){p.custo=vi.custo;ch++;}if(vi.venda>0&&!(p.venda>0)){p.venda=vi.venda;ch++;}});if(ch){buildIndex();persistCatalog();}return ch;}
 function fmt(n){return (n||0).toLocaleString('pt-BR');}
 function toast(m,t=''){const e=document.createElement('div');e.className='toast '+t;e.textContent=(t==='ok'?'✓ ':t==='err'?'✕ ':t==='warn'?'! ':'')+m;$('#toast').appendChild(e);setTimeout(()=>{e.style.transition='.3s';e.style.opacity='0';setTimeout(()=>e.remove(),300);},2000);}
 function tone(f,d,type,g){try{const c=new(window.AudioContext||window.webkitAudioContext)();const o=c.createOscillator(),ga=c.createGain();o.type=type;o.frequency.value=f;ga.gain.value=g;o.connect(ga);ga.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close();},d);}catch(e){}}
@@ -2277,13 +2282,14 @@ function parseStorePdf(lines){
 let PED={loja:'',days:15,vendas:null,vInfo:{},rows:[],editing:null};
 function pedInit(){const sel=$('#ped-store');if(sel&&!sel.options.length){sel.innerHTML='<option value="">— selecione —</option>'+FIXED_STORES.map(a=>'<option value="'+a[0]+'">'+distEscAttr(a[1])+'</option>').join('');}
   if(sel&&LOJA_USER&&!sel.value){sel.value=LOJA_USER;}}
-function pedForn(cod){return ((byCod[cod]||{}).forn)||'';}
+function pedForn(cod){const vf=(((PED.vInfo||{})[cod]||{}).forn)||'';const cf=((byCod[cod]||{}).forn)||'';if(vf&&!fornPlaceholder(vf))return vf;if(cf&&!fornPlaceholder(cf))return cf;return vf||cf||'';}
 function pedCusto(cod){return (((PED.vInfo||{})[cod]||{}).custo)||((byCod[cod]||{}).custo)||0;}
 function pedVenda(cod){return (((PED.vInfo||{})[cod]||{}).venda)||((byCod[cod]||{}).venda)||0;}
 function pedIsAdidas(r){const p=byCod[(r&&r.cod)||'']||{};const hay=(((r&&r.forn)||p.forn||'')+' '+((r&&r.desc)||p.desc||'')).toLowerCase();return hay.indexOf('adidas')>=0;}
 function pedMarkup(r){return pedIsAdidas(r)?2.0:2.5;}
 function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const res=parseVendasHtml(String(r.result));PED.vendas=res.map;PED.vInfo=res.info;PED.days=res.days;
+    const fornHeal=mergeVendasCatalog(res.info);
     pedInit();const sel=$('#ped-store');if(sel&&res.store)sel.value=res.store;if($('#ped-days'))$('#ped-days').value=res.days;
     const n=Object.keys(res.map).length,tot=Object.keys(res.map).reduce((a,k)=>a+res.map[k],0);
     const lojaNm=(FIXED_STORES.find(a=>a[0]===res.store)||[null,'(não identificada — selecione)'])[1];
@@ -2291,7 +2297,9 @@ function onPedVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)retur
     let diagTxt='';
     if(dg.comCusto>0){diagTxt='<span style="color:var(--ok,#13602f)">✓ custo lido'+(dg.custoNome?(' ("'+distEscAttr(dg.custoNome)+'")'):(dg.custoAssumido?' (coluna assumida)':''))+' — ex.: '+fmtBRL(dg.custoAmostra||0)+'</span>';}
     else{diagTxt='<span style="color:var(--err,#b42318)">⚠ não encontrei valor de custo neste arquivo'+(dg.custoNome?(' (coluna "'+distEscAttr(dg.custoNome)+'" veio zerada)'):'')+' — o custo/venda ficará R$ 0,00. Verifique se o relatório do Microvix inclui a coluna de custo.</span>';}
-    $('#ped-vinfo').innerHTML='<b>'+fmt(n)+'</b> produtos vendidos · <b>'+fmt(tot)+'</b> un · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'')+'<br>'+diagTxt;
+    let fornTxt='';
+    if(dg.comForn>0){fornTxt='<br><span style="color:var(--ok,#13602f)">✓ fornecedor lido do arquivo'+(fornHeal>0?(' — <b>'+fornHeal+'</b> cadastro(s) corrigido(s) (ex.: "GERAL" → fornecedor real)'):'')+'</span>';}
+    $('#ped-vinfo').innerHTML='<b>'+fmt(n)+'</b> produtos vendidos · <b>'+fmt(tot)+'</b> un · Loja: <b>'+distEscAttr(lojaNm)+'</b>'+(res.dIni?(' · '+res.dIni+' a '+res.dFim+' ('+res.days+' dias)'):'')+'<br>'+diagTxt+fornTxt;
     toast('Vendas carregadas','ok');
   }catch(e){toast('Não consegui ler o arquivo de vendas: '+e.message,'err');}};
   r.readAsText(f,'utf-8');ev.target.value='';
@@ -2485,8 +2493,12 @@ function parseVendasHtml(text){
   // fallback para o layout padrão do Microvix (Custo = col 6, Pr. Venda = col 9) quando o cabeçalho não nomeou as colunas
   if(iCusto<0){iCusto=6;custoAssumido=true;}
   if(iVenda<0){iVenda=9;vendaAssumido=true;}
-  const map={},info={};let custoAmostra=0,vendaAmostra=0,comCusto=0;
-  trs.forEach(tr=>{const cs=Array.prototype.map.call(tr.children,td=>td.textContent.trim());if(cs.length<=iQty)return;
+  const map={},info={};let custoAmostra=0,vendaAmostra=0,comCusto=0,curForn='',comForn=0;
+  trs.forEach(tr=>{const cs=Array.prototype.map.call(tr.children,td=>td.textContent.trim());if(!cs.length)return;
+    // cabeçalho de grupo "Fornecedor - NOME": o relatório vem agrupado pelo fornecedor real
+    const mf=cs.join(' ').match(/fornecedor\s*[-:]\s*(.+)/i);
+    if(mf&&!/^\d+$/.test(cleanCode(cs[iCod]||''))){curForn=parseFornName(mf[1]);return;}
+    if(cs.length<=iQty)return;
     const cod=cleanCode(cs[iCod]);if(!/^\d+$/.test(cod))return;
     const q=cobVNum(cs[iQty]);map[cod]=(map[cod]||0)+q;
     const d=cs[iDesc]||'',e=cleanCode(cs[iEan]||'');
@@ -2494,13 +2506,15 @@ function parseVendasHtml(text){
     const vn=(iVenda>=0&&cs.length>iVenda)?cobMoney(cs[iVenda]):0;
     if(cu>0){comCusto++;if(!custoAmostra)custoAmostra=cu;}
     if(vn>0&&!vendaAmostra)vendaAmostra=vn;
-    if(!info[cod])info[cod]={desc:d,ean:e,custo:cu,venda:vn};
-    else{if(cu&&!info[cod].custo)info[cod].custo=cu;if(vn&&!info[cod].venda)info[cod].venda=vn;}});
-  const diag={iCusto,iVenda,custoNome,vendaNome,custoAssumido,vendaAssumido,custoAmostra,vendaAmostra,comCusto,hdr};
+    if(curForn&&!fornPlaceholder(curForn))comForn++;
+    if(!info[cod])info[cod]={desc:d,ean:e,custo:cu,venda:vn,forn:curForn};
+    else{if(cu&&!info[cod].custo)info[cod].custo=cu;if(vn&&!info[cod].venda)info[cod].venda=vn;if(curForn&&(!info[cod].forn||fornPlaceholder(info[cod].forn)))info[cod].forn=curForn;}});
+  const diag={iCusto,iVenda,custoNome,vendaNome,custoAssumido,vendaAssumido,custoAmostra,vendaAmostra,comCusto,comForn,hdr};
   return {store,emp,days,dIni,dFim,map,info,diag};
 }
 function onCobVendas(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const res=parseVendasHtml(String(r.result));COB.vendas=res.map;COB.vInfo=res.info;COB.storeDet=res.store;COB.days=res.days;COB.dIni=res.dIni;COB.dFim=res.dFim;
+    mergeVendasCatalog(res.info);
     cobInit();const sel=$('#cob-store');if(sel&&res.store)sel.value=res.store;if($('#cob-days'))$('#cob-days').value=res.days;
     const nprod=Object.keys(res.map).length;const tot=Object.keys(res.map).reduce((a,k)=>a+res.map[k],0);
     const lojaNm=(FIXED_STORES.find(a=>a[0]===res.store)||[null,'(não identificada — selecione)'])[1];
