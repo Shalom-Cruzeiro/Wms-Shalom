@@ -2908,9 +2908,14 @@ function parseLojaEstoque(aoa){
   let hi=-1;
   for(let i=0;i<Math.min(aoa.length,40);i++){const r=(aoa[i]||[]).map(norm);if(r[0]==='codigo'&&r.some(c=>c.includes('barras'))){hi=i;break;}}
   if(hi<0)return null;
-  const colMap={};
-  for(let rr=hi;rr<=hi+1;rr++){const row=aoa[rr]||[];for(let c=5;c<row.length;c++){const m=String(row[c]==null?'':row[c]).match(/^(\d{1,3})\s*-/);if(m&&ENT_NUM2ID[m[1]]&&colMap[c]==null)colMap[c]=ENT_NUM2ID[m[1]];}}
-  if(!Object.keys(colMap).length)return null;
+  // Acha a linha de sub-cabeçalho das empresas (14-CENTRO, 15-LOJA...). Ela pode não estar logo
+  // abaixo do cabeçalho: novas colunas (Custo/Preço Venda) inserem uma linha intermediária, então
+  // varremos algumas linhas e escolhemos a que tem mais colunas de empresa.
+  let colMap={},bestN=0;
+  for(let rr=hi;rr<=Math.min(hi+5,aoa.length-1);rr++){const row=aoa[rr]||[];const m2={};let n=0;
+    for(let c=5;c<row.length;c++){const m=String(row[c]==null?'':row[c]).match(/^(\d{1,3})\s*-/);if(m&&ENT_NUM2ID[m[1]]&&m2[c]==null){m2[c]=ENT_NUM2ID[m[1]];n++;}}
+    if(n>bestN){bestN=n;colMap=m2;}}
+  if(bestN<1)return null;
   const byCod={},byEan={},info={};
   for(let i=hi+1;i<aoa.length;i++){const row=aoa[i]||[];const a=String(row[0]==null?'':row[0]).trim();if(!a)continue;const cod=cleanCode(a);if(!cod||!/^\d/.test(cod))continue;
     const o={};Object.keys(colMap).forEach(c=>{const v=row[c];const n=typeof v==='number'?Math.round(v):(parseInt(String(v).replace(/[^\d-]/g,''))||0);if(n)o[colMap[c]]=n;});
